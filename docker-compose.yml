@@ -1,0 +1,22 @@
+services:
+  ttwoouitomamout:
+    # Use a descriptive container name
+    container_name: "touitomamout"
+
+    # The Docker image for the application    image: ghcr.io/yamada-sexta/touitomamout-next:latest
+    build:
+      context: ./  # ← This will build the image from the source code
+    # This policy ensures the container restarts automatically if it stops
+    restart: unless-stopped
+
+    # Load all variables from the .env file in the same directory
+    env_file: ".env"
+
+    # You can also set specific environment variables here
+    environment:
+      - DATABASE_PATH=/data/data.sqlite
+
+    # Mount a local directory to persist data (like the database)
+    # This ensures your post history isn't lost when the container is updated
+    volumes:
+      - ./data/next:/data

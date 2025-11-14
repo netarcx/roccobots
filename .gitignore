@@ -1,0 +1,20 @@
+# NPM
+node_modules/
+
+# Build
+dist/
+
+# Misc
+.idea/
+.DS_Store
+.env*
+!.env.example
+coverage/
+
+# Temporary files
+cache*.json
+cookies*.json
+sqlite.db
+sqlite.db
+*.sqlite
+*.db
