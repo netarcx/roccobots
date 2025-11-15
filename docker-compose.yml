@@ -19,4 +19,15 @@ services:
     # Mount a local directory to persist data (like the database)
     # This ensures your post history isn't lost when the container is updated
     volumes:
-      - ./data/next:/data
+      - ./data:/data
+
+    # DNS servers to help with network connectivity issues on Linux
+    # Uncomment if experiencing WebSocket connection issues
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+
+    # Uncomment the following line if you're experiencing WebSocket connection issues
+    # on Linux. This uses the host's network stack directly.
+    # WARNING: This may have security implications
+    # network_mode: "host"

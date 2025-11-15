@@ -8,4 +8,4 @@ RUN bun install
 COPY src/ /app/src
 # COPY scripts/ /app/scripts
 
-CMD ["bun", "/src/index.ts"]
+CMD ["bun", "./src/index.ts"]
