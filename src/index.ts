@@ -7,6 +7,7 @@ import { syncProfile } from "sync/sync-profile";
 import { TaggedSynchronizer } from "sync/synchronizer";
 import { createTwitterClient } from "sync/x-client";
 import { logError, oraPrefixer } from "utils/logs";
+import { cycleTLSExit } from '@the-convocation/twitter-scraper/cycletls';
 
 import {
   DAEMON,
@@ -24,6 +25,7 @@ import { DiscordWebhookSynchronizerFactory } from "sync/platforms/discord-webhoo
 let interval: NodeJS.Timeout | null = null;
 process.on("exit", (code) => {
   console.log(`Process exited with code ${code}`);
+  cycleTLSExit();
 });
 // Register event
 process.on("SIGINT", () => {
