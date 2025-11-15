@@ -28,7 +28,7 @@ export async function createTwitterClient({
     xClientTransactionId: true,
     xpff: true,
     },
-    fetch: fetchImpl,
+    fetch: cycleTLSFetch,
     rateLimitStrategy: {
       async onRateLimit(e) {
         // console.log(e)
