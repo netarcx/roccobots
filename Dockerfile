@@ -1,4 +1,4 @@
-FROM oven/bun:alpine
+FROM oven/bun:debian
 
 WORKDIR /app
 COPY package.json bun.lock tsconfig.json .eslintrc.json /app/

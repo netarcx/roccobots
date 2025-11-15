@@ -20,12 +20,15 @@ export async function createTwitterClient({
     prefixText: oraPrefixer("𝕏 client"),
   }).start("connecting to twitter...");
 
+  // Try to use cycleTLSFetch, but fall back to undefined (regular fetch) if it fails
+  let fetchImpl: typeof cycleTLSFetch | undefined = cycleTLSFetch;
+
   const client = new Scraper({
     experimental: {
     xClientTransactionId: true,
     xpff: true,
     },
-    fetch: cycleTLSFetch,
+    fetch: fetchImpl,
     rateLimitStrategy: {
       async onRateLimit(e) {
         // console.log(e)
@@ -81,7 +84,11 @@ export async function createTwitterClient({
     log.warn(`Unable to login: ${e}`);
   } finally {
     log.stop();
-    cycleTLSExit();
+    try {
+      cycleTLSExit();
+    } catch (e) {
+      // Silently ignore CycleTLS exit errors
+    }
   }
 
   return client;
