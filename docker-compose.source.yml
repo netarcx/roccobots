@@ -1,8 +1,8 @@
 version: '3.9'
 
 services:
-  touitomamout:
-    container_name: "touitomamout"
+  roccobots:
+    container_name: "roccobots"
     build:
       context: ./  # ← This will build the image from the source code
     restart: unless-stopped

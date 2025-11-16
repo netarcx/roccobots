@@ -1,27 +1,14 @@
-# A Fork of the [Touitomamout](https://github.com/louisgrasset/touitomamout)
+# RoccoBots
+## A Fork of the Touitomamout-NEXT
 
-<p align="center">
-  <a href="https://yamada-sexta.github.io/touitomamout/docs/discover">
-    <img src="https://github.com/yamada-sexta/touitomamout/raw/main/.github/docs/touitomamout.svg" width="150px"/>
-  </a>
-</p>
-
-[![Release](https://img.shields.io/github/package-json/v/yamada-sexta/touitomamout/main?label=release&color=#4c1)](https://github.com/yamada-sexta/touitomamout/releases)
-[![License](https://img.shields.io/github/license/yamada-sexta/touitomamout?color=#4c1)](https://github.com/yamada-sexta/touitomamout/blob/main/LICENSE)
-[![Contributors](https://img.shields.io/github/contributors/yamada-sexta/touitomamout)](https://github.com/yamada-sexta/touitomamout/graphs/contributors)
-[![Issues](https://img.shields.io/github/issues/yamada-sexta/touitomamout)](https://github.com/yamada-sexta/touitomamout/issues)
-[![Github Stars](https://img.shields.io/github/stars/yamada-sexta/touitomamout?color=ffe34e)](https://github.com/yamada-sexta/touitomamout)
-[![GHCR](https://img.shields.io/badge/GHCR-ghcr.io%2Fyamada--sexta%2Ftouitomamout-086dd7?logo=github)](https://ghcr.io/yamada-sexta/touitomamout)
-[![Docker](https://img.shields.io/github/actions/workflow/status/yamada-sexta/touitomamout/docker.yml?label=Docker)](https://github.com/yamada-sexta/touitomamout/actions/workflows/docker.yml)
 
 An easy way to synchronize your posts on 𝕏 to other social media platforms.
 
 ## What's different about this Fork?
 
-- Build on Bun
-- Better default environment settings
-- Multi account support
-- More platforms
+- Fixes the awful name the orginal developer gave the project 
+- Updated to work with new Twitter endpoints
+- Bypasses Cloudflare
 
 ## Supported platforms
 
@@ -47,28 +34,20 @@ touitomamout/
 ### Docker Compose Setup
 
 ```yml
+version: '3.9'
+
 services:
-  touitomamout:
-    # Use a descriptive container name
-    container_name: "touitomamout"
-
-    # The Docker image for the application
-    image: ghcr.io/yamada-sexta/touitomamout-next:latest
-
-    # This policy ensures the container restarts automatically if it stops
+  roccobots:
+    container_name: "roccobots"
+    build:
+      context: ./  # ← This will build the image from the source code
     restart: unless-stopped
-
-    # Load all variables from the .env file in the same directory
-    env_file: ".env"
-
-    # You can also set specific environment variables here
     environment:
-      - DATABASE_PATH=/data/data.sqlite
-
-    # Mount a local directory to persist data (like the database)
-    # This ensures your post history isn't lost when the container is updated
+      - ENV_FILE=/data/.env
+      - STORAGE_DIR=/data
     volumes:
-      - ./data/next:/data
+      - ./data:/data
+
 ```
 
 ### Environment Variables `(.env)`
@@ -139,13 +118,9 @@ TWITTER_HANDLE2=ThirdXHandle
 # This account will post to Misskey
 MISSKEY_INSTANCE2=https://misskey.io
 MISSKEY_ACCESS_CODE2=zzzzzzzzzzzzzzzzzzzzzz
+
+### Questions
+
+contact me on bluesky @beastModeRocco.com
+
 ```
-
-
-
-## Documentation
-
-You'll find everything you need, from the project's discovery to its deployment, as well as its configuration and some technical deep dives.
-
-[<img src="https://github.com/louisgrasset/touitomamout/raw/main/.github/docs/documentation-center.svg"  width="300px"/>](https://github.com/yamada-sexta/touitomamout/wiki)
-

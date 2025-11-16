@@ -8,3 +8,4 @@ __test__
 /.vscode
 *.sqlite
 *.db
+*.env
