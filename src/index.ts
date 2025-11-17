@@ -177,7 +177,7 @@ const syncAll = async () => {
       x: xClient,
       synchronizers: user.synchronizers,
     });
-    console.log(`| ${user.handle.handle} is up-to-date ᐠ( ᐛ )ᐟ`);
+    console.log(`| ${user.handle.handle} is up-to-date 🔄`);
   }
 };
 
