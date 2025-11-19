@@ -1,6 +1,6 @@
 {
-  "name": "touitomamout-next",
-  "version": "2.0.0",
+  "name": "roccobots",
+  "version": "2.1.0",
   "description": "An easy way to synchronize your posts from X.com to other social media.",
   "scripts": {
     "lint": "eslint src/ --ext .ts",
@@ -10,28 +10,28 @@
     "node": ">=18.0.0"
   },
   "type": "module",
-  "author": "Louis Grasset",
-  "homepage": "https://github.com/louisgrasset/touitomamout",
+  "author": "@beastModeRocco",
+  "homepage": "https://github.com/netarcx/roccobots",
   "license": "AGPL-3.0-or-later",
   "repository": {
     "type": "git",
-    "url": "https://github.com/louisgrasset/touitomamout.git"
+    "url": "https://github.com/netarcx/roccobots.git"
   },
   "dependencies": {
     "@atproto/api": "^0.16.11",
     "@mailbutler/eldr": "^1.3.1",
-    "@the-convocation/twitter-scraper": "^0.20.1",
+    "@the-convocation/twitter-scraper": "^0.20.2",
     "cli-spinners": "^3.3.0",
     "cycletls": "^2.0.5",
-    "discord-api-types": "^0.38.33",
+    "discord-api-types": "^0.38.34",
     "drizzle-orm": "^0.44.7",
     "html-entities": "^2.6.0",
     "masto": "^7.4.0",
-    "misskey-js": "^2025.10.2",
+    "misskey-js": "^2025.11.0",
     "ora": "^8.2.0",
     "sharp": "^0.34.5",
     "tough-cookie": "^6.0.0",
-    "typescript-eslint": "^8.46.4",
+    "typescript-eslint": "^8.47.0",
     "zod": "^4.1.12"
   },
   "devDependencies": {
