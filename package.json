@@ -28,7 +28,7 @@
     "html-entities": "^2.6.0",
     "masto": "^7.4.0",
     "misskey-js": "^2025.11.0",
-    "ora": "^8.2.0",
+    "ora": "^9.0.0",
     "sharp": "^0.34.5",
     "tough-cookie": "^6.0.0",
     "typescript-eslint": "^8.47.0",
