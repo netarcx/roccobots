@@ -1,5 +1,13 @@
 import { DEBUG } from "env";
-import sharp from "sharp";
+import type sharp from "sharp";
+
+let _sharp: typeof sharp | undefined;
+async function getSharp(): Promise<typeof sharp> {
+  if (!_sharp) {
+    _sharp = (await import("sharp")).default;
+  }
+  return _sharp;
+}
 
 const findSmallerBuffer = (
   compressedBuffers: CompressedBuffer[],
@@ -40,8 +48,10 @@ export const compressMedia = async (
     return inputBlob;
   }
 
+  const sharpLib = await getSharp();
+
   // Initial image dimensions
-  const metadata = await sharp(inputBuffer).metadata();
+  const metadata = await sharpLib(inputBuffer).metadata();
   let width = metadata.width ?? 1;
   let height = metadata.height ?? 1;
 
@@ -53,14 +63,14 @@ export const compressMedia = async (
   // Loop until the image size is below the target size
   while (compressedBuffer.buffer.length > targetSizeInBytes && quality > 60) {
     // Test quality for each format
-    const formats = [sharp.format.jpeg, sharp.format.png]; // Use sharp.format instead of format
+    const formats = [sharpLib.format.jpeg, sharpLib.format.png]; // Use sharp.format instead of format
 
     const compressWithFormat = async (
       acc: Promise<CompressedBuffer[]>,
       currentFormat: sharp.AvailableFormatInfo,
     ) => {
       try {
-        const buffer = await sharp(inputBuffer)
+        const buffer = await sharpLib(inputBuffer)
           .resize({ width, height })
           .toFormat(currentFormat, { quality })
           .toBuffer();
