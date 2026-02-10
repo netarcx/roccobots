@@ -4,7 +4,6 @@ export { cycleTLSExit } from '@the-convocation/twitter-scraper/cycletls';
 import { DBType, Schema } from "db";
 import { eq } from "drizzle-orm";
 import ora from "ora";
-import { Cookie } from "tough-cookie";
 import { oraPrefixer } from "utils/logs";
 
 export async function createTwitterClient({
@@ -47,10 +46,8 @@ export async function createTwitterClient({
     const cookie = prevCookie.length ? prevCookie[0].cookie : null;
 
     if (cookie) {
-      const cookies: Cookie[] = (JSON.parse(cookie) as unknown[])
-        .map((o) => Cookie.fromJSON(o) as Cookie)
-        .filter((o) => o);
-      await client.setCookies(cookies.map((c) => c.toString()));
+      const cookies: string[] = JSON.parse(cookie);
+      await client.setCookies(cookies);
     }
 
     const loggedIn = await client.isLoggedIn();
@@ -64,7 +61,7 @@ export async function createTwitterClient({
     }
     if (await client.isLoggedIn()) {
       const cookies = await client.getCookies();
-      const cookieString = JSON.stringify(cookies);
+      const cookieString = JSON.stringify(cookies.map((c) => c.toString()));
       await db
         .insert(Schema.TwitterCookieCache)
         .values({
