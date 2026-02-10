@@ -16,7 +16,10 @@ botsRouter.use("*", requireAuth);
 
 // Schemas
 const createBotSchema = z.object({
-  twitterHandle: z.string().min(1, "Twitter handle is required"),
+  twitterHandle: z
+    .string()
+    .min(1, "Twitter handle is required")
+    .transform((v) => v.replace(/^@/, "")),
   twitterUsername: z.string().min(1, "Twitter username is required"),
   twitterPassword: z.string().min(1, "Twitter password is required"),
   enabled: z.boolean().optional(),
