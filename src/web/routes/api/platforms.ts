@@ -16,12 +16,12 @@ platformsRouter.use("*", requireAuth);
 const createPlatformSchema = z.object({
   platformId: z.enum(["bluesky", "mastodon", "misskey", "discord"]),
   enabled: z.boolean().optional(),
-  credentials: z.record(z.string()),
+  credentials: z.record(z.string(), z.string()),
 });
 
 const updatePlatformSchema = z.object({
   enabled: z.boolean().optional(),
-  credentials: z.record(z.string()).optional(),
+  credentials: z.record(z.string(), z.string()).optional(),
 });
 
 /**
