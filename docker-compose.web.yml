@@ -1,0 +1,22 @@
+services:
+  roccobots-web:
+    container_name: "roccobots-web"
+
+    build:
+      context: ./
+
+    restart: unless-stopped
+
+    # Load web-specific environment variables
+    env_file: ".env.web"
+
+    environment:
+      - DATABASE_PATH=/data/data.sqlite
+
+    ports:
+      - "3000:3000"
+
+    volumes:
+      - ./data:/data
+
+    command: ["bun", "./src/web-index.ts"]

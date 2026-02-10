@@ -10,4 +10,6 @@ RUN bun install -g cycletls
 COPY src/ /app/src
 # COPY scripts/ /app/scripts
 
+EXPOSE 3000
+
 CMD ["bun", "./src/index.ts"]
