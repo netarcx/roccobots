@@ -1,7 +1,4 @@
 import { DBType } from "db";
-// import * as v2 from "./schema/v2";
-// import * as v3 from "./schema/v3";
-// import * as v4 from "./schema/v4";
 import {
   generateSQLiteDrizzleJson,
   generateSQLiteMigration,
@@ -9,8 +6,9 @@ import {
 import { BunSQLiteDatabase } from "drizzle-orm/bun-sqlite";
 
 import * as v1 from "./schema/v1";
+import * as v2 from "./schema/v2";
 
-export const schemas = [{}, v1];
+export const schemas = [{}, v1, v2];
 // export const latestSchema = schemas[schemas.length - 1];
 
 export async function migrate(

@@ -59,7 +59,8 @@ export async function createTwitterClient({
     if (loggedIn) {
       log.succeed("connected (session restored)");
     } else {
-      // Handle restoration failure
+      // Clear stale cookies before fresh login attempt
+      await client.clearCookies();
       await client.login(twitterUsername, twitterPassword);
       log.succeed("connected (using credentials)");
     }
@@ -81,6 +82,10 @@ export async function createTwitterClient({
     }
     // await handleTwitterAuth(twitterClient);
   } catch (e) {
+    // Clear stale cookies from DB so next attempt starts fresh
+    await db
+      .delete(Schema.TwitterCookieCache)
+      .where(eq(Schema.TwitterCookieCache.userHandle, twitterUsername));
     log.warn(`Unable to login: ${e}`);
   } finally {
     log.stop();

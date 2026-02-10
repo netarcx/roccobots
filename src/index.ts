@@ -1,3 +1,10 @@
+// Check if running in web mode
+if (process.env.WEB_MODE === "true") {
+  console.log("⚠️  WEB_MODE is enabled. Please use 'bun src/web-index.ts' instead.");
+  console.log("   Or unset WEB_MODE to run in CLI mode.");
+  process.exit(1);
+}
+
 import { db } from "db";
 import ora from "ora";
 import { BlueskySynchronizerFactory } from "sync/platforms/bluesky";
