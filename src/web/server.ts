@@ -542,7 +542,7 @@ export function createServer(options: ServerOptions) {
                 </div>
                 <div class="form-group">
                   <label for="blueskyInstance">Bluesky Instance (optional)</label>
-                  <input type="text" id="blueskyInstance" placeholder="https://bsky.social" value="https://bsky.social">
+                  <input type="text" id="blueskyInstance" placeholder="bsky.social" value="bsky.social">
                 </div>
               </div>
             </details>
@@ -638,7 +638,7 @@ export function createServer(options: ServerOptions) {
                     return {
                       BLUESKY_IDENTIFIER: document.getElementById('blueskyIdentifier').value,
                       BLUESKY_PASSWORD: document.getElementById('blueskyPassword').value,
-                      BLUESKY_INSTANCE: document.getElementById('blueskyInstance').value || 'https://bsky.social',
+                      BLUESKY_INSTANCE: document.getElementById('blueskyInstance').value || 'bsky.social',
                     };
                   },
                   validate: function() {
@@ -857,7 +857,7 @@ export function createServer(options: ServerOptions) {
                 </div>
                 <div class="form-group">
                   <label for="blueskyInstance">Bluesky Instance</label>
-                  <input type="text" id="blueskyInstance" placeholder="https://bsky.social" value="https://bsky.social">
+                  <input type="text" id="blueskyInstance" placeholder="bsky.social" value="bsky.social">
                 </div>
               </div>
             </details>
@@ -944,7 +944,7 @@ export function createServer(options: ServerOptions) {
                       document.getElementById('blueskySection').open = true;
                       if (p.credentials) {
                         document.getElementById('blueskyIdentifier').value = p.credentials.BLUESKY_IDENTIFIER || '';
-                        document.getElementById('blueskyInstance').value = p.credentials.BLUESKY_INSTANCE || 'https://bsky.social';
+                        document.getElementById('blueskyInstance').value = p.credentials.BLUESKY_INSTANCE || 'bsky.social';
                       }
                     } else if (p.platformId === 'mastodon') {
                       document.getElementById('mastodonEnabled').checked = true;
@@ -1014,7 +1014,7 @@ export function createServer(options: ServerOptions) {
                   getCredentials: function() {
                     const creds = {
                       BLUESKY_IDENTIFIER: document.getElementById('blueskyIdentifier').value,
-                      BLUESKY_INSTANCE: document.getElementById('blueskyInstance').value || 'https://bsky.social',
+                      BLUESKY_INSTANCE: document.getElementById('blueskyInstance').value || 'bsky.social',
                     };
                     const pw = document.getElementById('blueskyPassword').value;
                     if (pw) creds.BLUESKY_PASSWORD = pw;
