@@ -1,8 +1,8 @@
-FROM oven/bun:alpine
+FROM oven/bun:slim
 
 WORKDIR /app
 
-RUN apk add --no-cache openssl ca-certificates
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 
 COPY package.json bun.lock tsconfig.json .eslintrc.json /app/
 RUN bun install --frozen-lockfile

@@ -30,15 +30,13 @@ console.log(`
 
 console.log("Starting web server...");
 
-// Create Twitter client
+// Create Twitter client (guest mode — each bot uses its own credentials)
 console.log("Creating Twitter client...");
 const xClient = await createTwitterClient({
-  twitterPassword: TWITTER_PASSWORD,
-  twitterUsername: TWITTER_USERNAME,
   db,
 });
 
-console.log("Twitter client created successfully");
+console.log("Twitter client created (guest mode)");
 
 // Create server
 const { app, botManager, configService, port } = createServer({
