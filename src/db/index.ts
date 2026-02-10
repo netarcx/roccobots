@@ -8,7 +8,6 @@ export const Schema = schema;
 
 const sqlite = new Database(DATABASE_PATH, {
   create: true,
-  safeIntegers: true,
   strict: true,
 });
 export type DBType = BunSQLiteDatabase<typeof Schema>;
