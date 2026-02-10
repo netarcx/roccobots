@@ -1,5 +1,6 @@
-import { DBType } from "db";
+import { DBType, Schema } from "db";
 import { Scraper as XClient } from "@the-convocation/twitter-scraper";
+import { eq } from "drizzle-orm";
 import { BlueskySynchronizerFactory } from "sync/platforms/bluesky";
 import { MastodonSynchronizerFactory } from "sync/platforms/mastodon/mastodon-sync";
 import { MisskeySynchronizerFactory } from "sync/platforms/misskey/missky-sync";
@@ -69,6 +70,81 @@ export class BotInstance extends EventEmitter {
     this.config = config;
     this.db = db;
     this.xClient = xClient;
+  }
+
+  /**
+   * Ensure the shared Twitter client is authenticated.
+   * Tries cached cookies first; only attempts a fresh login if no valid session exists.
+   */
+  private async ensureTwitterAuth(): Promise<void> {
+    const { twitterUsername, twitterPassword } = this.config;
+    if (!twitterUsername || !twitterPassword) {
+      this.emitLog("warn", "No Twitter credentials configured, running as guest");
+      return;
+    }
+
+    // Check if already logged in (another bot may have authenticated)
+    try {
+      if (await this.xClient.isLoggedIn()) {
+        this.emitLog("info", "Twitter session active");
+        return;
+      }
+    } catch {
+      // isLoggedIn failed — continue to cookie/login flow
+    }
+
+    // Try restoring cookies from DB
+    try {
+      const prevCookie = await this.db
+        .select()
+        .from(Schema.TwitterCookieCache)
+        .where(eq(Schema.TwitterCookieCache.userHandle, twitterUsername));
+      const cookie = prevCookie.length ? prevCookie[0].cookie : null;
+
+      if (cookie) {
+        const cookies: string[] = JSON.parse(cookie);
+        await this.xClient.setCookies(cookies);
+
+        if (await this.xClient.isLoggedIn()) {
+          this.emitLog("success", "Twitter session restored from cookies");
+          return;
+        }
+        // Cookies are stale, clear them
+        await this.xClient.clearCookies();
+      }
+    } catch {
+      // Cookie restore failed — fall through to login
+    }
+
+    // Fresh login as last resort (single attempt to avoid account locks)
+    try {
+      this.emitLog("info", "Attempting Twitter login...");
+      await this.xClient.login(twitterUsername, twitterPassword);
+
+      if (await this.xClient.isLoggedIn()) {
+        // Cache cookies for next time
+        const cookies = await this.xClient.getCookies();
+        const cookieString = JSON.stringify(cookies.map((c) => c.toString()));
+        await this.db
+          .insert(Schema.TwitterCookieCache)
+          .values({ userHandle: twitterUsername, cookie: cookieString })
+          .onConflictDoUpdate({
+            target: Schema.TwitterCookieCache.userHandle,
+            set: { cookie: cookieString },
+          });
+        this.emitLog("success", "Twitter login successful");
+      } else {
+        this.emitLog("warn", "Twitter login did not establish a session, continuing as guest");
+      }
+    } catch (e) {
+      // Clear stale cookies so next bot start tries fresh
+      try {
+        await this.db
+          .delete(Schema.TwitterCookieCache)
+          .where(eq(Schema.TwitterCookieCache.userHandle, twitterUsername));
+      } catch {}
+      this.emitLog("warn", `Twitter login failed: ${e}. Continuing as guest.`);
+    }
   }
 
   /**
@@ -253,15 +329,15 @@ export class BotInstance extends EventEmitter {
     this.emitLog("info", `Starting bot for @${this.config.twitterHandle}`);
 
     try {
+      // Authenticate the shared Twitter client with this bot's credentials
+      await this.ensureTwitterAuth();
+
       // Initialize synchronizers
       await this.initializeSynchronizers();
 
       if (this.synchronizers.length === 0) {
         throw new Error("No platforms configured or all platforms failed to initialize");
       }
-
-      // Small delay to let cycleTLS WebSocket connection stabilize
-      await new Promise((resolve) => setTimeout(resolve, 2000));
 
       // Perform initial sync (has internal retry logic for WebSocket errors)
       await this.performSync();
