@@ -12,7 +12,7 @@ import { MastodonSynchronizerFactory } from "sync/platforms/mastodon/mastodon-sy
 import { syncPosts } from "sync/sync-posts";
 import { syncProfile } from "sync/sync-profile";
 import { TaggedSynchronizer } from "sync/synchronizer";
-import { createTwitterClient } from "sync/x-client";
+import { createTwitterClient, cycleTLSExit } from "sync/x-client";
 import { logError, oraPrefixer } from "utils/logs";
 
 import {
@@ -36,11 +36,13 @@ process.on("exit", (code) => {
 process.on("SIGINT", () => {
   console.log("\nReceived SIGINT (Ctrl+C). Exiting...");
   if (interval) clearInterval(interval); // stop daemon loop
+  try { cycleTLSExit(); } catch {}
   process.exit(0);
 });
 
 process.on("SIGTERM", () => {
   console.log("Received SIGTERM. Exiting...");
+  try { cycleTLSExit(); } catch {}
   process.exit(0);
 });
 

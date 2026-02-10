@@ -1,5 +1,6 @@
 import { Scraper } from "@the-convocation/twitter-scraper";
-import { cycleTLSFetch, cycleTLSExit } from '@the-convocation/twitter-scraper/cycletls';
+import { cycleTLSFetch } from '@the-convocation/twitter-scraper/cycletls';
+export { cycleTLSExit } from '@the-convocation/twitter-scraper/cycletls';
 import { DBType, Schema } from "db";
 import { eq } from "drizzle-orm";
 import ora from "ora";
@@ -19,9 +20,6 @@ export async function createTwitterClient({
     color: "gray",
     prefixText: oraPrefixer("𝕏 client"),
   }).start("connecting to twitter...");
-
-  // Try to use cycleTLSFetch, but fall back to undefined (regular fetch) if it fails
-  let fetchImpl: typeof cycleTLSFetch | undefined = cycleTLSFetch;
 
   const client = new Scraper({
     experimental: {
@@ -89,11 +87,6 @@ export async function createTwitterClient({
     log.warn(`Unable to login: ${e}`);
   } finally {
     log.stop();
-    try {
-      cycleTLSExit();
-    } catch (e) {
-      // Silently ignore CycleTLS exit errors
-    }
   }
 
   return client;
