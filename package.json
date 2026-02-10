@@ -7,7 +7,8 @@
     "start:web": "bun src/web-index.ts",
     "generate-key": "node generate-key.js",
     "lint": "eslint src/ --ext .ts",
-    "lint:fix": "eslint src/ --ext .ts --fix"
+    "lint:fix": "eslint src/ --ext .ts --fix",
+    "postinstall": "node scripts/patch-twitter-scraper.js"
   },
   "engines": {
     "node": ">=18.0.0"
