@@ -85,11 +85,11 @@ export class BotManager extends EventEmitter {
       .all();
 
     return {
-      id: botConfig.id,
+      id: Number(botConfig.id),
       twitterHandle: botConfig.twitterHandle,
       twitterUsername: botConfig.twitterUsername,
       twitterPassword: decrypt(botConfig.twitterPassword),
-      syncFrequencyMin: botConfig.syncFrequencyMin,
+      syncFrequencyMin: Number(botConfig.syncFrequencyMin),
       syncPosts: botConfig.syncPosts,
       syncProfileDescription: botConfig.syncProfileDescription,
       syncProfilePicture: botConfig.syncProfilePicture,
@@ -222,12 +222,13 @@ export class BotManager extends EventEmitter {
       .all();
 
     for (const botConfig of allBots) {
+      const id = Number(botConfig.id);
       try {
-        if (!this.bots.has(botConfig.id)) {
-          await this.start(botConfig.id);
+        if (!this.bots.has(id)) {
+          await this.start(id);
         }
       } catch (error) {
-        console.error(`Failed to start bot ${botConfig.id}:`, error);
+        console.error(`Failed to start bot ${id}:`, error);
         // Continue with other bots
       }
     }
@@ -265,15 +266,16 @@ export class BotManager extends EventEmitter {
     const allBots = await this.db.select().from(Schema.BotConfigs).all();
 
     return allBots.map((botConfig) => {
-      const bot = this.bots.get(botConfig.id);
+      const id = Number(botConfig.id);
+      const bot = this.bots.get(id);
       return {
-        botId: botConfig.id,
+        botId: id,
         config: {
-          id: botConfig.id,
+          id,
           twitterHandle: botConfig.twitterHandle,
           twitterUsername: botConfig.twitterUsername,
           twitterPassword: "", // Don't expose password
-          syncFrequencyMin: botConfig.syncFrequencyMin,
+          syncFrequencyMin: Number(botConfig.syncFrequencyMin),
           syncPosts: botConfig.syncPosts,
           syncProfileDescription: botConfig.syncProfileDescription,
           syncProfilePicture: botConfig.syncProfilePicture,

@@ -133,19 +133,19 @@ export class ConfigService {
     const platforms = await this.getPlatformConfigsByBotId(id);
 
     return {
-      id: botConfig.id,
+      id: Number(botConfig.id),
       twitterHandle: botConfig.twitterHandle,
       twitterUsername: botConfig.twitterUsername,
       enabled: botConfig.enabled,
-      syncFrequencyMin: botConfig.syncFrequencyMin,
+      syncFrequencyMin: Number(botConfig.syncFrequencyMin),
       syncPosts: botConfig.syncPosts,
       syncProfileDescription: botConfig.syncProfileDescription,
       syncProfilePicture: botConfig.syncProfilePicture,
       syncProfileName: botConfig.syncProfileName,
       syncProfileHeader: botConfig.syncProfileHeader,
       backdateBlueskyPosts: botConfig.backdateBlueskyPosts,
-      createdAt: new Date(botConfig.createdAt),
-      updatedAt: new Date(botConfig.updatedAt),
+      createdAt: new Date(Number(botConfig.createdAt)),
+      updatedAt: new Date(Number(botConfig.updatedAt)),
       platforms,
     };
   }
@@ -267,12 +267,12 @@ export class ConfigService {
     }
 
     return {
-      botConfigId: platformConfig.botConfigId,
+      botConfigId: Number(platformConfig.botConfigId),
       platformId: platformConfig.platformId,
       enabled: platformConfig.enabled,
       credentials: decryptJSON<Record<string, string>>(platformConfig.credentials),
-      createdAt: new Date(platformConfig.createdAt),
-      updatedAt: new Date(platformConfig.updatedAt),
+      createdAt: new Date(Number(platformConfig.createdAt)),
+      updatedAt: new Date(Number(platformConfig.updatedAt)),
     };
   }
 
@@ -289,12 +289,12 @@ export class ConfigService {
       .all();
 
     return platforms.map((p) => ({
-      botConfigId: p.botConfigId,
+      botConfigId: Number(p.botConfigId),
       platformId: p.platformId,
       enabled: p.enabled,
       credentials: decryptJSON<Record<string, string>>(p.credentials),
-      createdAt: new Date(p.createdAt),
-      updatedAt: new Date(p.updatedAt),
+      createdAt: new Date(Number(p.createdAt)),
+      updatedAt: new Date(Number(p.updatedAt)),
     }));
   }
 
@@ -380,6 +380,11 @@ export class ConfigService {
       .offset(offset)
       .all();
 
-    return logs;
+    return logs.map((l) => ({
+      ...l,
+      id: Number(l.id),
+      botConfigId: Number(l.botConfigId),
+      timestamp: new Date(Number(l.timestamp)),
+    }));
   }
 }
