@@ -2,6 +2,7 @@ import { EventEmitter } from "events";
 import { DBType, Schema } from "db";
 import { BotInstance, BotConfig, BotInstanceStatus } from "sync/bot-instance";
 import { Scraper as XClient } from "@the-convocation/twitter-scraper";
+import { createTwitterClient } from "sync/x-client";
 import { eq } from "drizzle-orm";
 import { decryptJSON, decrypt } from "./encryption-service";
 
@@ -32,12 +33,26 @@ export type BotManagerEvents = {
 export class BotManager extends EventEmitter {
   private bots: Map<number, BotInstance> = new Map();
   private db: DBType;
-  private xClient: XClient;
+  private xClient: XClient | null = null;
 
-  constructor(db: DBType, xClient: XClient) {
+  constructor(db: DBType) {
     super();
     this.db = db;
-    this.xClient = xClient;
+  }
+
+  /**
+   * Create the shared Twitter client lazily on first bot start
+   */
+  private async ensureXClient(config: BotConfig): Promise<XClient> {
+    if (this.xClient) return this.xClient;
+
+    this.xClient = await createTwitterClient({
+      twitterUsername: config.twitterUsername,
+      twitterPassword: config.twitterPassword,
+      db: this.db,
+    });
+
+    return this.xClient;
   }
 
   /**
@@ -142,8 +157,11 @@ export class BotManager extends EventEmitter {
     // Load configuration
     const config = await this.loadBotConfig(botId);
 
+    // Ensure Twitter client is ready (creates lazily on first bot start)
+    const xClient = await this.ensureXClient(config);
+
     // Create bot instance
-    const bot = new BotInstance(config, this.db, this.xClient);
+    const bot = new BotInstance(config, this.db, xClient);
 
     // Set up event forwarding
     bot.on("log", (logData) => {

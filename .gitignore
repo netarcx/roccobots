@@ -10,6 +10,7 @@ dist/
 .env*
 !.env.example
 !.env.web.example
+.encryption.key
 coverage/
 
 # Temporary files

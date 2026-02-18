@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import { serveStatic } from "hono/bun";
 import { DBType } from "db";
-import { Scraper as XClient } from "@the-convocation/twitter-scraper";
 import { sessionMiddleware } from "./middleware/auth";
 import { errorHandler } from "./middleware/error";
 import { BotManager } from "./services/bot-manager";
@@ -16,7 +15,6 @@ import { requireAuth } from "./middleware/auth";
 
 export interface ServerOptions {
   db: DBType;
-  xClient: XClient;
   port?: number;
 }
 
@@ -24,12 +22,12 @@ export interface ServerOptions {
  * Create and configure the web server
  */
 export function createServer(options: ServerOptions) {
-  const { db, xClient, port = 3000 } = options;
+  const { db, port = 3000 } = options;
 
   const app = new Hono();
 
   // Initialize services
-  const botManager = new BotManager(db, xClient);
+  const botManager = new BotManager(db);
   const configService = new ConfigService(db);
 
   // Apply global middleware

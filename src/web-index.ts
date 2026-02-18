@@ -1,25 +1,20 @@
-import { db } from "db";
-import { createTwitterClient } from "sync/x-client";
-import { TWITTER_PASSWORD, TWITTER_USERNAME } from "./env";
+import { existsSync } from "fs";
+import { join } from "path";
+import { db, Schema } from "db";
 import { createServer } from "./web/server";
+import { importFromEnv } from "./web/services/config-migration";
 import { serve } from "@hono/node-server";
 
 const WEB_PORT = parseInt(process.env.WEB_PORT || "3000");
 
 // Validate required environment variables
 if (!process.env.WEB_ADMIN_PASSWORD) {
-  console.error("ERROR: WEB_ADMIN_PASSWORD environment variable is required");
-  console.error("Please set a secure admin password:");
-  console.error("  export WEB_ADMIN_PASSWORD=your_secure_password");
-  process.exit(1);
-}
-
-if (!process.env.ENCRYPTION_KEY) {
-  console.error("ERROR: ENCRYPTION_KEY environment variable is required");
-  console.error("Generate one with: openssl rand -hex 32");
-  console.error("Then set it:");
-  console.error("  export ENCRYPTION_KEY=<generated_key>");
-  process.exit(1);
+    console.error(
+        "ERROR: WEB_ADMIN_PASSWORD environment variable is required",
+    );
+    console.error("Please set a secure admin password:");
+    console.error("  export WEB_ADMIN_PASSWORD=your_secure_password");
+    process.exit(1);
 }
 
 console.log(`
@@ -30,41 +25,45 @@ console.log(`
 
 console.log("Starting web server...");
 
-// Create Twitter client
-console.log("Creating Twitter client...");
-const xClient = await createTwitterClient({
-  twitterPassword: TWITTER_PASSWORD,
-  twitterUsername: TWITTER_USERNAME,
-  db,
-});
-
-console.log("Twitter client created successfully");
-
 // Create server
 const { app, botManager, configService, port } = createServer({
-  db,
-  xClient,
-  port: WEB_PORT,
+    db,
+    port: WEB_PORT,
 });
+
+// Auto-import bots from .env if database is empty
+const envPath = join(process.cwd(), ".env");
+const existingBots = await db.select().from(Schema.BotConfigs).all();
+
+if (existingBots.length === 0 && existsSync(envPath)) {
+    console.log("No bots configured — auto-importing from .env...");
+    const result = await importFromEnv(configService, envPath);
+    if (result.created > 0) {
+        console.log(`Imported ${result.created} bot(s) from .env`);
+    }
+    if (result.errors.length > 0) {
+        console.warn("Import errors:", result.errors);
+    }
+}
 
 // Start server
 console.log(`\n🚀 Server starting on http://localhost:${port}`);
 console.log(`\n📝 Login with your WEB_ADMIN_PASSWORD\n`);
 
 serve({
-  fetch: app.fetch,
-  port,
+    fetch: app.fetch,
+    port,
 });
 
 // Graceful shutdown
 process.on("SIGINT", () => {
-  console.log("\nShutting down gracefully...");
-  botManager.stopAll();
-  process.exit(0);
+    console.log("\nShutting down gracefully...");
+    botManager.stopAll();
+    process.exit(0);
 });
 
 process.on("SIGTERM", () => {
-  console.log("\nShutting down gracefully...");
-  botManager.stopAll();
-  process.exit(0);
+    console.log("\nShutting down gracefully...");
+    botManager.stopAll();
+    process.exit(0);
 });
