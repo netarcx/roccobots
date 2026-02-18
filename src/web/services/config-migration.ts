@@ -164,7 +164,7 @@ export async function importFromEnv(
               platformId: "mastodon",
               credentials: {
                 MASTODON_INSTANCE: mastodonInstance,
-                MASTODON_TOKEN: mastodonToken,
+                MASTODON_ACCESS_TOKEN: mastodonToken,
               },
             });
           } catch (error) {
@@ -186,7 +186,7 @@ export async function importFromEnv(
               platformId: "misskey",
               credentials: {
                 MISSKEY_INSTANCE: misskeyInstance,
-                MISSKEY_TOKEN: misskeyToken,
+                MISSKEY_ACCESS_CODE: misskeyToken,
               },
             });
           } catch (error) {
@@ -206,7 +206,7 @@ export async function importFromEnv(
               botConfigId: botConfig.id,
               platformId: "discord",
               credentials: {
-                DISCORD_WEBHOOK: discordWebhook,
+                DISCORD_WEBHOOK_URL: discordWebhook,
               },
             });
           } catch (error) {

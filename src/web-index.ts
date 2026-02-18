@@ -36,12 +36,16 @@ const envPath = join(process.cwd(), ".env");
 const existingBots = await db.select().from(Schema.BotConfigs).all();
 
 if (existingBots.length === 0 && existsSync(envPath)) {
-    console.log("No bots configured — auto-importing from .env...");
+    console.log("No bots configured — checking .env for import...");
     const result = await importFromEnv(configService, envPath);
     if (result.created > 0) {
         console.log(`Imported ${result.created} bot(s) from .env`);
-    }
-    if (result.errors.length > 0) {
+    } else if (
+        result.errors.length === 1 &&
+        result.errors[0].includes("No TWITTER_HANDLE")
+    ) {
+        console.log("No Twitter handles found in .env — skipping auto-import");
+    } else if (result.errors.length > 0) {
         console.warn("Import errors:", result.errors);
     }
 }

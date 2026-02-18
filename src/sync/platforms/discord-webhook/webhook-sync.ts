@@ -120,7 +120,7 @@ function formatForDiscord(tweet: MetaPost): { content?: string; embeds: APIEmbed
 export const DiscordWebhookSynchronizerFactory: SynchronizerFactory<typeof KEYS, typeof WebhookStoreSchema> = {
     EMOJI: "🔗",
     DISPLAY_NAME: "Webhook (Discord)",
-    PLATFORM_ID: "webhook-discord",
+    PLATFORM_ID: "discord",
     ENV_KEYS: KEYS,
     STORE_SCHEMA: WebhookStoreSchema,
     async create(args) {
