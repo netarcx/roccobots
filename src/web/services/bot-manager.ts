@@ -34,6 +34,7 @@ export class BotManager extends EventEmitter {
   private bots: Map<number, BotInstance> = new Map();
   private db: DBType;
   private xClient: XClient | null = null;
+  private xClientPromise: Promise<XClient> | null = null;
 
   constructor(db: DBType) {
     super();
@@ -41,18 +42,26 @@ export class BotManager extends EventEmitter {
   }
 
   /**
-   * Create the shared Twitter client lazily on first bot start
+   * Create the shared Twitter client lazily on first bot start.
+   * Uses a promise guard to prevent concurrent logins (which would
+   * trigger Cloudflare detection).
    */
   private async ensureXClient(config: BotConfig): Promise<XClient> {
     if (this.xClient) return this.xClient;
+    if (this.xClientPromise) return this.xClientPromise;
 
-    this.xClient = await createTwitterClient({
+    this.xClientPromise = createTwitterClient({
       twitterUsername: config.twitterUsername,
       twitterPassword: config.twitterPassword,
       db: this.db,
     });
 
-    return this.xClient;
+    try {
+      this.xClient = await this.xClientPromise;
+      return this.xClient;
+    } finally {
+      this.xClientPromise = null;
+    }
   }
 
   /**
