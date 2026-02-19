@@ -172,6 +172,12 @@ export class BotInstance extends EventEmitter {
         },
         synchronizers: this.synchronizers,
         db: this.db,
+        syncOptions: {
+          syncProfileDescription: this.config.syncProfileDescription,
+          syncProfilePicture: this.config.syncProfilePicture,
+          syncProfileName: this.config.syncProfileName,
+          syncProfileHeader: this.config.syncProfileHeader,
+        },
       });
 
       // Sync posts if enabled

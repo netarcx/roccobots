@@ -118,8 +118,18 @@ export async function syncProfile(args: {
   x: Scraper;
   synchronizers: TaggedSynchronizer[];
   db: DBType;
+  syncOptions?: {
+    syncProfileDescription?: boolean;
+    syncProfilePicture?: boolean;
+    syncProfileName?: boolean;
+    syncProfileHeader?: boolean;
+  };
 }): Promise<void> {
   const { x: x, synchronizers, db } = args;
+  const shouldSyncDescription = args.syncOptions?.syncProfileDescription ?? SYNC_PROFILE_DESCRIPTION;
+  const shouldSyncPicture = args.syncOptions?.syncProfilePicture ?? SYNC_PROFILE_PICTURE;
+  const shouldSyncName = args.syncOptions?.syncProfileName ?? SYNC_PROFILE_NAME;
+  const shouldSyncHeader = args.syncOptions?.syncProfileHeader ?? SYNC_PROFILE_HEADER;
   const log = ora({
     color: "cyan",
     prefixText: oraPrefixer("profile"),
@@ -142,7 +152,7 @@ export async function syncProfile(args: {
 
   const jobs: Promise<void>[] = [];
 
-  if (SYNC_PROFILE_PICTURE && pfpChanged && pfpBlob) {
+  if (shouldSyncPicture && pfpChanged && pfpBlob) {
     jobs.push(
       ...synchronizers
         .filter((s) => s.syncProfilePic)
@@ -156,7 +166,7 @@ export async function syncProfile(args: {
     );
   }
 
-  if (SYNC_PROFILE_HEADER && bannerChanged && bannerBlob) {
+  if (shouldSyncHeader && bannerChanged && bannerBlob) {
     jobs.push(
       ...synchronizers
         .filter((s) => s.syncBanner)
@@ -170,7 +180,7 @@ export async function syncProfile(args: {
     );
   }
 
-  if (SYNC_PROFILE_DESCRIPTION && profile.biography) {
+  if (shouldSyncDescription && profile.biography) {
     const formattedBio = await shortenedUrlsReplacer(profile.biography);
     jobs.push(
       ...synchronizers
@@ -186,7 +196,7 @@ export async function syncProfile(args: {
     );
   }
 
-  if (SYNC_PROFILE_NAME && profile.name) {
+  if (shouldSyncName && profile.name) {
     jobs.push(
       ...synchronizers
         .filter((s) => s.syncUserName)
