@@ -1,6 +1,9 @@
+import { db } from "db";
 import { Hono } from "hono";
 import { z } from "zod";
+
 import { requireAuth } from "../../middleware/auth";
+import { exportBackup, importBackup } from "../../services/backup-service";
 import { BotManager } from "../../services/bot-manager";
 import { ConfigService } from "../../services/config-service";
 
@@ -84,8 +87,59 @@ systemRouter.put("/settings/twitter-auth", async (c) => {
     return c.json({ success: true, username: data.username });
   } catch (error) {
     if (error instanceof z.ZodError) {
+      return c.json({ error: "Validation error", details: error.errors }, 400);
+    }
+    return c.json({ error: (error as Error).message }, 400);
+  }
+});
+
+/**
+ * GET /api/system/backup
+ * Export all bot configs, credentials, and sync state as a JSON file
+ */
+systemRouter.get("/backup", async (c) => {
+  const configService = c.get("configService");
+
+  try {
+    const backup = await exportBackup(configService, db);
+    const date = new Date().toISOString().slice(0, 10);
+    const filename = `roccobots-backup-${date}.json`;
+
+    c.header("Content-Disposition", `attachment; filename="${filename}"`);
+    c.header("Content-Type", "application/json");
+    return c.body(JSON.stringify(backup, null, 2));
+  } catch (error) {
+    return c.json({ error: (error as Error).message }, 500);
+  }
+});
+
+/**
+ * POST /api/system/restore
+ * Import bot configs, credentials, and sync state from a JSON backup.
+ * All bots must be stopped before restoring.
+ */
+systemRouter.post("/restore", async (c) => {
+  const botManager = c.get("botManager");
+  const configService = c.get("configService");
+
+  try {
+    // Check that no bots are running
+    const allBots = await configService.getAllBotConfigs();
+    const hasRunning = allBots.some((bot) => botManager.isRunning(bot.id));
+    if (hasRunning) {
       return c.json(
-        { error: "Validation error", details: error.errors },
+        { error: "All bots must be stopped before restoring a backup" },
+        400,
+      );
+    }
+
+    const body = await c.req.json();
+    const result = await importBackup(configService, db, body);
+    return c.json(result);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return c.json(
+        { error: "Invalid backup format", details: error.errors },
         400,
       );
     }
