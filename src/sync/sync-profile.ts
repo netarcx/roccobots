@@ -16,6 +16,7 @@ import { getBlobHash } from "utils/medias/get-blob-hash";
 import { shortenedUrlsReplacer } from "utils/url/shortened-urls-replacer";
 
 import { TaggedSynchronizer } from "./synchronizer";
+import type { SyncLogCallback } from "./sync-posts";
 
 const Table = Schema.TwitterProfileCache;
 
@@ -118,6 +119,7 @@ export async function syncProfile(args: {
   x: Scraper;
   synchronizers: TaggedSynchronizer[];
   db: DBType;
+  onLog?: SyncLogCallback;
   syncOptions?: {
     syncProfileDescription?: boolean;
     syncProfilePicture?: boolean;
@@ -125,7 +127,7 @@ export async function syncProfile(args: {
     syncProfileHeader?: boolean;
   };
 }): Promise<void> {
-  const { x: x, synchronizers, db } = args;
+  const { x: x, synchronizers, db, onLog } = args;
   const shouldSyncDescription = args.syncOptions?.syncProfileDescription ?? SYNC_PROFILE_DESCRIPTION;
   const shouldSyncPicture = args.syncOptions?.syncProfilePicture ?? SYNC_PROFILE_PICTURE;
   const shouldSyncName = args.syncOptions?.syncProfileName ?? SYNC_PROFILE_NAME;
@@ -135,6 +137,7 @@ export async function syncProfile(args: {
     prefixText: oraPrefixer("profile"),
   }).start();
   log.text = "parsing";
+  onLog?.("info", "Fetching profile...");
 
   // --- COMMON LOGIC: FETCH ---
   const profile = await x.getProfile(args.twitterHandle.handle);
@@ -153,6 +156,7 @@ export async function syncProfile(args: {
   const jobs: Promise<void>[] = [];
 
   if (shouldSyncPicture && pfpChanged && pfpBlob) {
+    onLog?.("info", "Profile picture changed, syncing...");
     jobs.push(
       ...synchronizers
         .filter((s) => s.syncProfilePic)
@@ -161,12 +165,13 @@ export async function syncProfile(args: {
             log,
             profile,
             pfpFile: pfpBlob,
-          }),
+          }).then(() => onLog?.("success", `Synced profile picture to ${s.displayName}`, s.platformId)),
         ),
     );
   }
 
   if (shouldSyncHeader && bannerChanged && bannerBlob) {
+    onLog?.("info", "Banner changed, syncing...");
     jobs.push(
       ...synchronizers
         .filter((s) => s.syncBanner)
@@ -175,13 +180,14 @@ export async function syncProfile(args: {
             log,
             profile,
             bannerFile: bannerBlob,
-          }),
+          }).then(() => onLog?.("success", `Synced banner to ${s.displayName}`, s.platformId)),
         ),
     );
   }
 
   if (shouldSyncDescription && profile.biography) {
     const formattedBio = await shortenedUrlsReplacer(profile.biography);
+    onLog?.("info", "Syncing bio...");
     jobs.push(
       ...synchronizers
         .filter((s) => s.syncBio)
@@ -191,12 +197,13 @@ export async function syncProfile(args: {
             profile,
             bio: profile.biography!,
             formattedBio,
-          }),
+          }).then(() => onLog?.("success", `Synced bio to ${s.displayName}`, s.platformId)),
         ),
     );
   }
 
   if (shouldSyncName && profile.name) {
+    onLog?.("info", "Syncing display name...");
     jobs.push(
       ...synchronizers
         .filter((s) => s.syncUserName)
@@ -205,7 +212,7 @@ export async function syncProfile(args: {
             log,
             profile,
             name: profile.name!,
-          }),
+          }).then(() => onLog?.("success", `Synced display name to ${s.displayName}`, s.platformId)),
         ),
     );
   }
@@ -214,8 +221,14 @@ export async function syncProfile(args: {
   try {
     await Promise.all(jobs);
     log.succeed("synced");
+    if (jobs.length > 0) {
+      onLog?.("success", "Profile sync complete");
+    } else {
+      onLog?.("info", "Profile is up-to-date");
+    }
   } catch (error) {
     logError(log, error)`Error during synchronization: ${error}`
+    onLog?.("error", `Profile sync error: ${error}`);
   }
   log.stop();
 }

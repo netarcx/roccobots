@@ -20,13 +20,21 @@ const MAX_TWEET = 200;
 const TweetMap = Schema.TweetMap;
 const TweetSynced = Schema.TweetSynced;
 
+export type SyncLogCallback = (
+    level: "info" | "warn" | "error" | "success",
+    message: string,
+    platform?: string,
+    tweetId?: string,
+) => void;
+
 export async function syncPosts(args: {
     db: DBType;
     handle: TwitterHandle;
     x: Scraper;
     synchronizers: TaggedSynchronizer[];
+    onLog?: SyncLogCallback;
 }) {
-    const { db, handle, x, synchronizers } = args;
+    const { db, handle, x, synchronizers, onLog } = args;
     if (!synchronizers.filter((s) => s.syncPost).length) {
         return;
     }
@@ -35,6 +43,7 @@ export async function syncPosts(args: {
         prefixText: oraPrefixer("posts"),
     }).start();
     log.text = "starting...";
+    onLog?.("info", "Fetching tweets...");
 
     let cachedCounter = 0;
     let counter = 0;
@@ -47,6 +56,7 @@ export async function syncPosts(args: {
             log.text = `syncing [${counter}/${MAX_TWEET}]`;
             if (cachedCounter >= MAX_NEW_CONSECUTIVE_CACHED) {
                 log.info("skipping because too many consecutive cached tweets");
+                onLog?.("info", `Stopping early — ${MAX_NEW_CONSECUTIVE_CACHED} consecutive cached tweets`);
                 break;
             }
             if (!isValidPost(tweet)) {
@@ -95,9 +105,11 @@ export async function syncPosts(args: {
                             platformStore: storeStr,
                         }).onConflictDoNothing();
                         platformLog.succeed(`${s.emoji} ${s.displayName} synced`);
+                        onLog?.("success", `Synced tweet to ${s.displayName}`, s.platformId, tweet.id);
                     } catch (e) {
                         logError(platformLog, e)`Failed to sync tweet ${tweet.id} to ${s.displayName}: ${e}`
                         console.warn(e)
+                        onLog?.("error", `Failed to sync tweet ${tweet.id} to ${s.displayName}: ${e}`, s.platformId, tweet.id);
                     }
                     platformLog.stop()
                 }
@@ -117,7 +129,9 @@ export async function syncPosts(args: {
         }
     } catch (e) {
         console.error("Scraper failed with an error:", e);
+        onLog?.("error", `Scraper error: ${e}`);
     }
 
     log.succeed("synced");
+    onLog?.("success", `Post sync complete (${counter} tweets checked)`);
 }

@@ -161,6 +161,8 @@ export class BotInstance extends EventEmitter {
     try {
       this.emitLog("info", `Starting sync for @${this.config.twitterHandle}`);
 
+      const onLog = this.emitLog.bind(this);
+
       // Sync profile
       await syncProfile({
         x: this.xClient,
@@ -172,6 +174,7 @@ export class BotInstance extends EventEmitter {
         },
         synchronizers: this.synchronizers,
         db: this.db,
+        onLog,
         syncOptions: {
           syncProfileDescription: this.config.syncProfileDescription,
           syncProfilePicture: this.config.syncProfilePicture,
@@ -192,6 +195,7 @@ export class BotInstance extends EventEmitter {
           },
           x: this.xClient,
           synchronizers: this.synchronizers,
+          onLog,
         });
       } else {
         this.emitLog("info", "Post syncing is disabled");
