@@ -87,15 +87,16 @@ export const MisskeySynchronizerFactory: SynchronizerFactory<typeof KEYS, typeof
                 return await runWithRateLimitRetry(async () => {
                     const mediaIds: string[] = []
                     const t = args.tweet;
-                    // const dt = await downloadTweet(args.tweet);
-                    (await t.photoFiles()).forEach(async p =>
-                        p.file ?
-                            mediaIds.push(
-                                (await uploadMedia(p.file)).id
-                            ) : undefined);
-
-                    (await t.videoFiles()).forEach(async v => v.file ?
-                        mediaIds.push(((await uploadMedia(v.file)).id)) : undefined)
+                    for (const p of await t.photoFiles()) {
+                        if (p.file) {
+                            mediaIds.push((await uploadMedia(p.file)).id);
+                        }
+                    }
+                    for (const v of await t.videoFiles()) {
+                        if (v.file) {
+                            mediaIds.push((await uploadMedia(v.file)).id);
+                        }
+                    }
                     const res = await api.request("notes/create", {
                         text: args.tweet.text,
                         mediaIds: mediaIds.length ? mediaIds : undefined,

@@ -14,6 +14,7 @@ import { syncProfile } from "sync/sync-profile";
 import { TaggedSynchronizer } from "sync/synchronizer";
 import { createTwitterClient, cycleTLSExit } from "sync/x-client";
 import { logError, oraPrefixer } from "utils/logs";
+import { sendNotification } from "utils/notifications";
 
 import {
   DAEMON,
@@ -78,11 +79,22 @@ const factories = [
   DiscordWebhookSynchronizerFactory,
 ] as const;
 
-const xClient = await createTwitterClient({
-  twitterPassword: TWITTER_PASSWORD,
-  twitterUsername: TWITTER_USERNAME,
-  db,
-});
+let xClient;
+try {
+  xClient = await createTwitterClient({
+    twitterPassword: TWITTER_PASSWORD,
+    twitterUsername: TWITTER_USERNAME,
+    db,
+  });
+} catch (error) {
+  sendNotification(
+    "Twitter client failed",
+    error instanceof Error ? error.message : String(error),
+    "failure",
+    "twitter-client",
+  );
+  throw error;
+}
 
 const users: SyncUser[] = [];
 interface SyncUser {
@@ -170,23 +182,33 @@ const syncAll = async () => {
       `\n𝕏 ->  ${user.synchronizers.map((s) => s.emoji).join(" + ")}`,
     );
     console.log(`| @${user.handle.handle}`);
-    await syncProfile({
-      x: xClient,
-      twitterHandle: user.handle,
-      synchronizers: user.synchronizers,
-      db,
-    });
-    if (!SYNC_POSTS){
-      console.log("Posts will not be synced...")
-      continue
+    try {
+      await syncProfile({
+        x: xClient,
+        twitterHandle: user.handle,
+        synchronizers: user.synchronizers,
+        db,
+      });
+      if (!SYNC_POSTS){
+        console.log("Posts will not be synced...")
+        continue
+      }
+      await syncPosts({
+        db,
+        handle: user.handle,
+        x: xClient,
+        synchronizers: user.synchronizers,
+      });
+      console.log(`| ${user.handle.handle} is up-to-date 🔄`);
+    } catch (error) {
+      console.error(`Sync failed for @${user.handle.handle}:`, error);
+      sendNotification(
+        `Sync failed for @${user.handle.handle}`,
+        error instanceof Error ? error.message : String(error),
+        "failure",
+        `sync-${user.handle.handle}`,
+      );
     }
-    await syncPosts({
-      db,
-      handle: user.handle,
-      x: xClient,
-      synchronizers: user.synchronizers,
-    });
-    console.log(`| ${user.handle.handle} is up-to-date 🔄`);
   }
 };
 

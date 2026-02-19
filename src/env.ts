@@ -79,9 +79,15 @@ export const TOUITOMAMOUT_VERSION = packageInfo.version ?? "0.0.0";
 export const MASTODON_MAX_POST_LENGTH = 500;
 export const BLUESKY_MAX_POST_LENGTH = 300;
 export const BLUESKY_MEDIA_MAX_SIZE_BYTES = 976560;
-export const MAX_CONSECUTIVE_CACHED = 25;
+export const MAX_CONSECUTIVE_CACHED = 5;
 export const FORCE_SYNC_POSTS =
   (process.env.FORCE_SYNC_POSTS ?? "false") === "true";
 
-
 export const SYNC_POSTS = (process.env.SYNC_POSTS ?? "true") === "true";
+
+export const LOG_RETENTION_DAYS = parseInt(
+  process.env.LOG_RETENTION_DAYS ?? "30",
+);
+
+export const APPRISE_URL = (process.env.APPRISE_URL ?? "").trim();
+export const APPRISE_URLS = (process.env.APPRISE_URLS ?? "").trim();

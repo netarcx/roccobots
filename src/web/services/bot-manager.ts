@@ -1,11 +1,14 @@
-import { EventEmitter } from "events";
-import { DBType, Schema } from "db";
-import { BotInstance, BotConfig, BotInstanceStatus } from "sync/bot-instance";
 import { Scraper as XClient } from "@the-convocation/twitter-scraper";
+import { DBType, Schema } from "db";
+import { eq, lt } from "drizzle-orm";
+import { LOG_RETENTION_DAYS } from "env";
+import { EventEmitter } from "events";
+import { BotConfig, BotInstance, BotInstanceStatus } from "sync/bot-instance";
 import { createTwitterClient } from "sync/x-client";
-import { eq } from "drizzle-orm";
-import { decryptJSON } from "./encryption-service";
+import { sendNotification } from "utils/notifications";
+
 import { ConfigService } from "./config-service";
+import { decryptJSON } from "./encryption-service";
 
 export interface BotLogEvent {
   botId: number;
@@ -37,6 +40,7 @@ export class BotManager extends EventEmitter {
   private configService: ConfigService;
   private xClient: XClient | null = null;
   private xClientPromise: Promise<XClient> | null = null;
+  private pruneInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(db: DBType, configService: ConfigService) {
     super();
@@ -57,7 +61,9 @@ export class BotManager extends EventEmitter {
 
     const auth = await this.configService.getTwitterAuthDecrypted();
     if (!auth) {
-      throw new Error("Twitter credentials not configured. Please set them in Settings.");
+      throw new Error(
+        "Twitter credentials not configured. Please set them in Settings.",
+      );
     }
 
     this.xClientPromise = createTwitterClient({
@@ -197,6 +203,15 @@ export class BotManager extends EventEmitter {
       this.updateBotStatusInDB(botId, status);
     });
 
+    bot.on("error", (error) => {
+      sendNotification(
+        `Bot ${botId} error`,
+        error instanceof Error ? error.message : String(error),
+        "failure",
+        `bot-error-${botId}`,
+      );
+    });
+
     // Start the bot
     await bot.start();
 
@@ -237,15 +252,59 @@ export class BotManager extends EventEmitter {
         }
       } catch (error) {
         console.error(`Failed to start bot ${id}:`, error);
+        sendNotification(
+          `Bot ${id} failed to start`,
+          error instanceof Error ? error.message : String(error),
+          "failure",
+          `bot-start-${id}`,
+        );
         // Continue with other bots
       }
     }
   }
 
   /**
+   * Delete sync_logs older than LOG_RETENTION_DAYS
+   */
+  private async pruneOldLogs(): Promise<void> {
+    if (LOG_RETENTION_DAYS < 0) return;
+    try {
+      const cutoff = new Date(
+        Date.now() - LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000,
+      );
+      const result = await this.db
+        .delete(Schema.SyncLogs)
+        .where(lt(Schema.SyncLogs.timestamp, cutoff));
+      const deleted = result.changes;
+      if (deleted > 0) {
+        console.log(
+          `Pruned ${deleted} log(s) older than ${LOG_RETENTION_DAYS} day(s)`,
+        );
+      }
+    } catch (error) {
+      console.error("Failed to prune old logs:", error);
+    }
+  }
+
+  /**
+   * Start periodic log pruning (runs immediately, then every 24 hours)
+   */
+  startLogPruning(): void {
+    this.pruneOldLogs();
+    this.pruneInterval = setInterval(
+      () => this.pruneOldLogs(),
+      24 * 60 * 60 * 1000,
+    );
+  }
+
+  /**
    * Stop all running bots
    */
   stopAll(): void {
+    if (this.pruneInterval) {
+      clearInterval(this.pruneInterval);
+      this.pruneInterval = null;
+    }
     for (const [botId, bot] of this.bots.entries()) {
       try {
         bot.stop();
@@ -269,7 +328,11 @@ export class BotManager extends EventEmitter {
    * Get status of all bots
    */
   async getAllStatus(): Promise<
-    Array<{ botId: number; config: BotConfig; status: BotInstanceStatus | null }>
+    Array<{
+      botId: number;
+      config: BotConfig;
+      status: BotInstanceStatus | null;
+    }>
   > {
     const allBots = await this.db.select().from(Schema.BotConfigs).all();
 

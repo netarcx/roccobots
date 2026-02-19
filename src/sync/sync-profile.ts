@@ -13,10 +13,11 @@ import ora from "ora";
 import { logError, oraPrefixer } from "utils/logs";
 import { download } from "utils/medias/download-media";
 import { getBlobHash } from "utils/medias/get-blob-hash";
+import { withRetry } from "utils/retry";
 import { shortenedUrlsReplacer } from "utils/url/shortened-urls-replacer";
 
-import { TaggedSynchronizer } from "./synchronizer";
 import type { SyncLogCallback } from "./sync-posts";
+import { TaggedSynchronizer } from "./synchronizer";
 
 const Table = Schema.TwitterProfileCache;
 
@@ -128,10 +129,13 @@ export async function syncProfile(args: {
   };
 }): Promise<void> {
   const { x: x, synchronizers, db, onLog } = args;
-  const shouldSyncDescription = args.syncOptions?.syncProfileDescription ?? SYNC_PROFILE_DESCRIPTION;
-  const shouldSyncPicture = args.syncOptions?.syncProfilePicture ?? SYNC_PROFILE_PICTURE;
+  const shouldSyncDescription =
+    args.syncOptions?.syncProfileDescription ?? SYNC_PROFILE_DESCRIPTION;
+  const shouldSyncPicture =
+    args.syncOptions?.syncProfilePicture ?? SYNC_PROFILE_PICTURE;
   const shouldSyncName = args.syncOptions?.syncProfileName ?? SYNC_PROFILE_NAME;
-  const shouldSyncHeader = args.syncOptions?.syncProfileHeader ?? SYNC_PROFILE_HEADER;
+  const shouldSyncHeader =
+    args.syncOptions?.syncProfileHeader ?? SYNC_PROFILE_HEADER;
   const log = ora({
     color: "cyan",
     prefixText: oraPrefixer("profile"),
@@ -145,13 +149,17 @@ export async function syncProfile(args: {
   const bannerUrl = profile.banner ?? "";
 
   log.text = "checking media cache...";
-  const { pfpChanged, bannerChanged, pfp: pfpBlob, banner: bannerBlob } =
-    await upsertProfileCache({
-      db,
-      userId: args.twitterHandle.handle,
-      bannerUrl,
-      pfpUrl,
-    });
+  const {
+    pfpChanged,
+    bannerChanged,
+    pfp: pfpBlob,
+    banner: bannerBlob,
+  } = await upsertProfileCache({
+    db,
+    userId: args.twitterHandle.handle,
+    bannerUrl,
+    pfpUrl,
+  });
 
   const jobs: Promise<void>[] = [];
 
@@ -161,11 +169,24 @@ export async function syncProfile(args: {
       ...synchronizers
         .filter((s) => s.syncProfilePic)
         .map((s) =>
-          s.syncProfilePic!({
-            log,
-            profile,
-            pfpFile: pfpBlob,
-          }).then(() => onLog?.("success", `Synced profile picture to ${s.displayName}`, s.platformId)),
+          withRetry(
+            () => s.syncProfilePic!({ log, profile, pfpFile: pfpBlob }),
+            {
+              onRetry: (attempt, error) => {
+                onLog?.(
+                  "warn",
+                  `Retry ${attempt}/3 ${s.displayName} pfp: ${error}`,
+                  s.platformId,
+                );
+              },
+            },
+          ).then(() =>
+            onLog?.(
+              "success",
+              `Synced profile picture to ${s.displayName}`,
+              s.platformId,
+            ),
+          ),
         ),
     );
   }
@@ -176,11 +197,24 @@ export async function syncProfile(args: {
       ...synchronizers
         .filter((s) => s.syncBanner)
         .map((s) =>
-          s.syncBanner!({
-            log,
-            profile,
-            bannerFile: bannerBlob,
-          }).then(() => onLog?.("success", `Synced banner to ${s.displayName}`, s.platformId)),
+          withRetry(
+            () => s.syncBanner!({ log, profile, bannerFile: bannerBlob }),
+            {
+              onRetry: (attempt, error) => {
+                onLog?.(
+                  "warn",
+                  `Retry ${attempt}/3 ${s.displayName} banner: ${error}`,
+                  s.platformId,
+                );
+              },
+            },
+          ).then(() =>
+            onLog?.(
+              "success",
+              `Synced banner to ${s.displayName}`,
+              s.platformId,
+            ),
+          ),
         ),
     );
   }
@@ -192,12 +226,26 @@ export async function syncProfile(args: {
       ...synchronizers
         .filter((s) => s.syncBio)
         .map((s) =>
-          s.syncBio!({
-            log,
-            profile,
-            bio: profile.biography!,
-            formattedBio,
-          }).then(() => onLog?.("success", `Synced bio to ${s.displayName}`, s.platformId)),
+          withRetry(
+            () =>
+              s.syncBio!({
+                log,
+                profile,
+                bio: profile.biography!,
+                formattedBio,
+              }),
+            {
+              onRetry: (attempt, error) => {
+                onLog?.(
+                  "warn",
+                  `Retry ${attempt}/3 ${s.displayName} bio: ${error}`,
+                  s.platformId,
+                );
+              },
+            },
+          ).then(() =>
+            onLog?.("success", `Synced bio to ${s.displayName}`, s.platformId),
+          ),
         ),
     );
   }
@@ -208,11 +256,24 @@ export async function syncProfile(args: {
       ...synchronizers
         .filter((s) => s.syncUserName)
         .map((s) =>
-          s.syncUserName!({
-            log,
-            profile,
-            name: profile.name!,
-          }).then(() => onLog?.("success", `Synced display name to ${s.displayName}`, s.platformId)),
+          withRetry(
+            () => s.syncUserName!({ log, profile, name: profile.name! }),
+            {
+              onRetry: (attempt, error) => {
+                onLog?.(
+                  "warn",
+                  `Retry ${attempt}/3 ${s.displayName} name: ${error}`,
+                  s.platformId,
+                );
+              },
+            },
+          ).then(() =>
+            onLog?.(
+              "success",
+              `Synced display name to ${s.displayName}`,
+              s.platformId,
+            ),
+          ),
         ),
     );
   }
@@ -227,7 +288,7 @@ export async function syncProfile(args: {
       onLog?.("info", "Profile is up-to-date");
     }
   } catch (error) {
-    logError(log, error)`Error during synchronization: ${error}`
+    logError(log, error)`Error during synchronization: ${error}`;
     onLog?.("error", `Profile sync error: ${error}`);
   }
   log.stop();
