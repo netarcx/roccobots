@@ -70,5 +70,14 @@ export async function migrate(
     console.log("Database is already up to date.");
   }
 
+  // Drop legacy unique index on twitter_handle (allows multiple bots per handle)
+  try {
+    db.run(
+      "DROP INDEX IF EXISTS bot_configs_twitter_handle_unique",
+    );
+  } catch (_) {
+    // Ignore if index doesn't exist
+  }
+
   return db as DBType;
 }

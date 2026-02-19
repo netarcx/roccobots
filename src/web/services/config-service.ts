@@ -78,17 +78,6 @@ export class ConfigService {
    * Create a new bot configuration
    */
   async createBotConfig(input: CreateBotConfigInput): Promise<BotConfigOutput> {
-    // Check if handle already exists
-    const existing = await this.db
-      .select()
-      .from(Schema.BotConfigs)
-      .where(eq(Schema.BotConfigs.twitterHandle, input.twitterHandle))
-      .get();
-
-    if (existing) {
-      throw new Error(`Bot with handle @${input.twitterHandle} already exists`);
-    }
-
     // Encrypt password
     const encryptedPassword = encrypt(input.twitterPassword);
 

@@ -13,7 +13,7 @@ export * from "./v1";
  */
 export const BotConfigs = sqliteTable("bot_configs", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  twitterHandle: text("twitter_handle").notNull().unique(),
+  twitterHandle: text("twitter_handle").notNull(),
   twitterUsername: text("twitter_username").notNull(),
   twitterPassword: text("twitter_password").notNull(), // encrypted
   enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
