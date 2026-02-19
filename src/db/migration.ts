@@ -79,6 +79,15 @@ export async function migrate(
     // Ignore if index doesn't exist
   }
 
+  // Ensure twitter_auth table exists (added after v2 schema was already deployed)
+  db.run(`CREATE TABLE IF NOT EXISTS twitter_auth (
+    id integer PRIMARY KEY DEFAULT 1,
+    username text NOT NULL,
+    password text NOT NULL,
+    created_at integer NOT NULL,
+    updated_at integer NOT NULL
+  )`);
+
   // Backfill twitter_auth from first bot's credentials if table is empty
   try {
     const authCount = db
