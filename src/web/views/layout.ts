@@ -16,6 +16,7 @@ function nav(authenticated: boolean): string {
             <div class="hidden sm:flex items-center gap-1">
               <a href="/" class="px-3 py-1.5 rounded text-sm text-slate-300 hover:text-white hover:bg-slate-700 transition-colors">Dashboard</a>
               <a href="/bots/new" class="px-3 py-1.5 rounded text-sm text-slate-300 hover:text-white hover:bg-slate-700 transition-colors">Add Bot</a>
+              <a href="/settings" class="px-3 py-1.5 rounded text-sm text-slate-300 hover:text-white hover:bg-slate-700 transition-colors">Settings</a>
             </div>
           </div>
           <button onclick="logout()" class="text-sm text-slate-400 hover:text-white transition-colors">Logout</button>

@@ -5,6 +5,18 @@ export function dashboardPage(): string {
         title: "Dashboard",
         authenticated: true,
         content: `
+    <!-- Twitter Auth Warning -->
+    <div id="twitter-auth-warning" class="hidden bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 mb-6">
+      <div class="flex items-center gap-3">
+        <span class="text-amber-400 text-lg">&#9888;</span>
+        <div class="flex-1">
+          <div class="text-sm font-medium text-amber-300">Twitter credentials not configured</div>
+          <div class="text-xs text-amber-400/80 mt-0.5">Bots cannot start without Twitter login credentials. Configure them in Settings.</div>
+        </div>
+        <a href="/settings" class="text-xs bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded transition-colors">Go to Settings</a>
+      </div>
+    </div>
+
     <!-- Stats -->
     <div id="stats" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
       <div class="bg-slate-800 border border-slate-700 rounded-lg p-4">
@@ -214,8 +226,20 @@ export function dashboardPage(): string {
         };
       }
 
+      // Check Twitter auth status
+      async function checkTwitterAuth() {
+        try {
+          const res = await fetch('/api/system/settings/twitter-auth');
+          const data = await res.json();
+          if (!data.configured) {
+            document.getElementById('twitter-auth-warning').classList.remove('hidden');
+          }
+        } catch (_) {}
+      }
+
       loadBots();
       connectSSE();
+      checkTwitterAuth();
     </script>`,
     });
 }

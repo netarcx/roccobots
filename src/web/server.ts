@@ -15,6 +15,7 @@ import { loginPage } from "./views/login";
 import { dashboardPage } from "./views/dashboard";
 import { botFormPage } from "./views/bot-form";
 import { logsPage } from "./views/logs";
+import { settingsPage } from "./views/settings";
 
 export interface ServerOptions {
     db: DBType;
@@ -30,8 +31,8 @@ export function createServer(options: ServerOptions) {
     const app = new Hono();
 
     // Initialize services
-    const botManager = new BotManager(db);
     const configService = new ConfigService(db);
+    const botManager = new BotManager(db, configService);
 
     // Apply global middleware
     app.use("*", errorHandler);
@@ -101,6 +102,16 @@ export function createServer(options: ServerOptions) {
         } catch (_error) {
             return c.redirect("/");
         }
+    });
+
+    app.get("/settings", requireAuth, async (_c) => {
+        const auth = await configService.getTwitterAuth();
+        return _c.html(
+            settingsPage({
+                twitterAuthConfigured: !!auth,
+                twitterUsername: auth?.username ?? null,
+            }),
+        );
     });
 
     app.get("/bots/:id/logs", requireAuth, async (c) => {

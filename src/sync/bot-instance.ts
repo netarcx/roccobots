@@ -13,8 +13,6 @@ import { EventEmitter } from "events";
 export interface BotConfig {
   id: number;
   twitterHandle: string;
-  twitterUsername: string;
-  twitterPassword: string;
   syncFrequencyMin: number;
   syncPosts: boolean;
   syncProfileDescription: boolean;

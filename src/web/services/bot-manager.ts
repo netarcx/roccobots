@@ -4,7 +4,8 @@ import { BotInstance, BotConfig, BotInstanceStatus } from "sync/bot-instance";
 import { Scraper as XClient } from "@the-convocation/twitter-scraper";
 import { createTwitterClient } from "sync/x-client";
 import { eq } from "drizzle-orm";
-import { decryptJSON, decrypt } from "./encryption-service";
+import { decryptJSON } from "./encryption-service";
+import { ConfigService } from "./config-service";
 
 export interface BotLogEvent {
   botId: number;
@@ -33,12 +34,14 @@ export type BotManagerEvents = {
 export class BotManager extends EventEmitter {
   private bots: Map<number, BotInstance> = new Map();
   private db: DBType;
+  private configService: ConfigService;
   private xClient: XClient | null = null;
   private xClientPromise: Promise<XClient> | null = null;
 
-  constructor(db: DBType) {
+  constructor(db: DBType, configService: ConfigService) {
     super();
     this.db = db;
+    this.configService = configService;
     // Allow many SSE clients (each adds 4 listeners)
     this.setMaxListeners(50);
   }
@@ -48,13 +51,18 @@ export class BotManager extends EventEmitter {
    * Uses a promise guard to prevent concurrent logins (which would
    * trigger Cloudflare detection).
    */
-  private async ensureXClient(config: BotConfig): Promise<XClient> {
+  private async ensureXClient(): Promise<XClient> {
     if (this.xClient) return this.xClient;
     if (this.xClientPromise) return this.xClientPromise;
 
+    const auth = await this.configService.getTwitterAuthDecrypted();
+    if (!auth) {
+      throw new Error("Twitter credentials not configured. Please set them in Settings.");
+    }
+
     this.xClientPromise = createTwitterClient({
-      twitterUsername: config.twitterUsername,
-      twitterPassword: config.twitterPassword,
+      twitterUsername: auth.username,
+      twitterPassword: auth.password,
       db: this.db,
     });
 
@@ -89,8 +97,6 @@ export class BotManager extends EventEmitter {
     return {
       id: Number(botConfig.id),
       twitterHandle: botConfig.twitterHandle,
-      twitterUsername: botConfig.twitterUsername,
-      twitterPassword: decrypt(botConfig.twitterPassword),
       syncFrequencyMin: Number(botConfig.syncFrequencyMin),
       syncPosts: botConfig.syncPosts,
       syncProfileDescription: botConfig.syncProfileDescription,
@@ -169,7 +175,7 @@ export class BotManager extends EventEmitter {
     const config = await this.loadBotConfig(botId);
 
     // Ensure Twitter client is ready (creates lazily on first bot start)
-    const xClient = await this.ensureXClient(config);
+    const xClient = await this.ensureXClient();
 
     // Create bot instance
     const bot = new BotInstance(config, this.db, xClient);
@@ -275,8 +281,6 @@ export class BotManager extends EventEmitter {
         config: {
           id,
           twitterHandle: botConfig.twitterHandle,
-          twitterUsername: botConfig.twitterUsername,
-          twitterPassword: "", // Don't expose password
           syncFrequencyMin: Number(botConfig.syncFrequencyMin),
           syncPosts: botConfig.syncPosts,
           syncProfileDescription: botConfig.syncProfileDescription,

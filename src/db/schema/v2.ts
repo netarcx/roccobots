@@ -103,6 +103,21 @@ export const BotStatus = sqliteTable("bot_status", {
 });
 
 /**
+ * Twitter auth - global Twitter login credentials (single row)
+ */
+export const TwitterAuth = sqliteTable("twitter_auth", {
+  id: integer("id").primaryKey().default(1),
+  username: text("username").notNull(),
+  password: text("password").notNull(), // encrypted
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+    .notNull()
+    .$defaultFn(() => new Date()),
+});
+
+/**
  * Web sessions - session storage for web interface authentication
  */
 export const WebSessions = sqliteTable("web_sessions", {

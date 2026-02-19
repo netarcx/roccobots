@@ -79,5 +79,26 @@ export async function migrate(
     // Ignore if index doesn't exist
   }
 
+  // Backfill twitter_auth from first bot's credentials if table is empty
+  try {
+    const authCount = db
+      .all("SELECT COUNT(*) as count FROM twitter_auth") as any[];
+    if (authCount[0]?.count === 0 || authCount[0]?.["COUNT(*)"] === 0) {
+      const firstBot = db
+        .all(
+          "SELECT twitter_username, twitter_password FROM bot_configs ORDER BY id ASC LIMIT 1",
+        ) as any[];
+      if (firstBot.length > 0 && firstBot[0].twitter_username && firstBot[0].twitter_password) {
+        const now = Date.now();
+        db.run(
+          `INSERT INTO twitter_auth (id, username, password, created_at, updated_at) VALUES (1, '${firstBot[0].twitter_username}', '${firstBot[0].twitter_password}', ${now}, ${now})`,
+        );
+        console.log("✅ Backfilled twitter_auth from first bot's credentials");
+      }
+    }
+  } catch (_) {
+    // Table may not exist yet if migration just created it — that's fine
+  }
+
   return db as DBType;
 }

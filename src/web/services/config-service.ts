@@ -2,10 +2,12 @@ import { DBType, Schema } from "db";
 import { eq, and, desc } from "drizzle-orm";
 import { encrypt, decrypt, encryptJSON, decryptJSON } from "./encryption-service";
 
+export interface TwitterAuthOutput {
+  username: string;
+}
+
 export interface CreateBotConfigInput {
   twitterHandle: string;
-  twitterUsername: string;
-  twitterPassword: string;
   enabled?: boolean;
   syncFrequencyMin?: number;
   syncPosts?: boolean;
@@ -18,8 +20,6 @@ export interface CreateBotConfigInput {
 
 export interface UpdateBotConfigInput {
   twitterHandle?: string;
-  twitterUsername?: string;
-  twitterPassword?: string;
   enabled?: boolean;
   syncFrequencyMin?: number;
   syncPosts?: boolean;
@@ -33,7 +33,6 @@ export interface UpdateBotConfigInput {
 export interface BotConfigOutput {
   id: number;
   twitterHandle: string;
-  twitterUsername: string;
   enabled: boolean;
   syncFrequencyMin: number;
   syncPosts: boolean;
@@ -78,16 +77,13 @@ export class ConfigService {
    * Create a new bot configuration
    */
   async createBotConfig(input: CreateBotConfigInput): Promise<BotConfigOutput> {
-    // Encrypt password
-    const encryptedPassword = encrypt(input.twitterPassword);
-
-    // Insert bot config
+    // Insert bot config (Twitter auth is now global, stored in twitter_auth table)
     const result = await this.db
       .insert(Schema.BotConfigs)
       .values({
         twitterHandle: input.twitterHandle,
-        twitterUsername: input.twitterUsername,
-        twitterPassword: encryptedPassword,
+        twitterUsername: "",
+        twitterPassword: "",
         enabled: input.enabled ?? true,
         syncFrequencyMin: input.syncFrequencyMin ?? 30,
         syncPosts: input.syncPosts ?? true,
@@ -124,7 +120,6 @@ export class ConfigService {
     return {
       id: Number(botConfig.id),
       twitterHandle: botConfig.twitterHandle,
-      twitterUsername: botConfig.twitterUsername,
       enabled: botConfig.enabled,
       syncFrequencyMin: Number(botConfig.syncFrequencyMin),
       syncPosts: botConfig.syncPosts,
@@ -171,11 +166,6 @@ export class ConfigService {
       ...input,
       updatedAt: new Date(),
     };
-
-    // Encrypt password if provided
-    if (input.twitterPassword) {
-      updateData.twitterPassword = encrypt(input.twitterPassword);
-    }
 
     await this.db
       .update(Schema.BotConfigs)
@@ -375,5 +365,72 @@ export class ConfigService {
       botConfigId: Number(l.botConfigId),
       timestamp: new Date(Number(l.timestamp)),
     }));
+  }
+
+  /**
+   * Get global Twitter auth credentials (username only — never returns password)
+   */
+  async getTwitterAuth(): Promise<TwitterAuthOutput | null> {
+    const row = await this.db
+      .select()
+      .from(Schema.TwitterAuth)
+      .where(eq(Schema.TwitterAuth.id, 1))
+      .get();
+
+    if (!row) return null;
+    return { username: row.username };
+  }
+
+  /**
+   * Get decrypted Twitter auth credentials (for internal use only)
+   */
+  async getTwitterAuthDecrypted(): Promise<{ username: string; password: string } | null> {
+    const row = await this.db
+      .select()
+      .from(Schema.TwitterAuth)
+      .where(eq(Schema.TwitterAuth.id, 1))
+      .get();
+
+    if (!row) return null;
+    return { username: row.username, password: decrypt(row.password) };
+  }
+
+  /**
+   * Set or update global Twitter auth credentials
+   */
+  async setTwitterAuth(username: string, password: string): Promise<void> {
+    const encryptedPassword = encrypt(password);
+    const now = new Date();
+
+    await this.db
+      .insert(Schema.TwitterAuth)
+      .values({
+        id: 1,
+        username,
+        password: encryptedPassword,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: Schema.TwitterAuth.id,
+        set: {
+          username,
+          password: encryptedPassword,
+          updatedAt: now,
+        },
+      });
+  }
+
+  /**
+   * Check if global Twitter auth is configured
+   */
+  async hasTwitterAuth(): Promise<boolean> {
+    const row = await this.db
+      .select({ id: Schema.TwitterAuth.id })
+      .from(Schema.TwitterAuth)
+      .where(eq(Schema.TwitterAuth.id, 1))
+      .get();
+
+    return !!row;
   }
 }

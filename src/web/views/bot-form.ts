@@ -8,7 +8,6 @@ import {
 interface BotData {
     id?: number;
     twitterHandle?: string;
-    twitterUsername?: string;
     syncFrequencyMin?: number;
     syncPosts?: boolean;
     syncProfileDescription?: boolean;
@@ -80,25 +79,14 @@ export function botFormPage(bot?: BotData): string {
       <form id="bot-form" onsubmit="handleSubmit(event)">
         <!-- Bot Configuration -->
         <div class="bg-slate-800 border border-slate-700 rounded-lg p-6 mb-6">
-          <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wide mb-4">Twitter Configuration</h2>
+          <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wide mb-4">Source Account</h2>
           <div class="space-y-4">
             <div>
-              <label class="block text-sm text-slate-400 mb-1">Twitter Handle (without @)</label>
+              <label class="block text-sm text-slate-400 mb-1">Source Handle (without @)</label>
               <input type="text" id="twitterHandle" value="${escapeAttr(bot?.twitterHandle || "")}" ${isEdit ? "readonly" : "required"}
                 class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 ${isEdit ? "opacity-60 cursor-not-allowed" : ""}"
                 placeholder="username">
-            </div>
-            <div>
-              <label class="block text-sm text-slate-400 mb-1">Twitter Username (email)</label>
-              <input type="text" id="twitterUsername" value="${escapeAttr(bot?.twitterUsername || "")}" ${isEdit ? "" : "required"}
-                class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
-                placeholder="email@example.com">
-            </div>
-            <div>
-              <label class="block text-sm text-slate-400 mb-1">Twitter Password</label>
-              <input type="password" id="twitterPassword" ${isEdit ? "" : "required"}
-                class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
-                placeholder="${isEdit ? "Leave blank to keep current" : "Password"}">
+              <p class="text-xs text-slate-500 mt-1">The Twitter account to copy posts from. Twitter login credentials are configured in <a href="/settings" class="text-blue-400 hover:text-blue-300">Settings</a>.</p>
             </div>
             <div>
               <label class="block text-sm text-slate-400 mb-1">Sync Frequency (minutes)</label>
@@ -278,7 +266,6 @@ export function botFormPage(bot?: BotData): string {
         try {
           const body = {
             twitterHandle: document.getElementById('twitterHandle').value,
-            twitterUsername: document.getElementById('twitterUsername').value,
             syncFrequencyMin: parseInt(document.getElementById('syncFrequencyMin').value),
             syncPosts: document.getElementById('syncPosts').checked,
             syncProfileDescription: document.getElementById('syncProfileDescription').checked,
@@ -288,10 +275,6 @@ export function botFormPage(bot?: BotData): string {
             backdateBlueskyPosts: document.getElementById('backdateBlueskyPosts').checked,
             enabled: document.getElementById('enabled').checked,
           };
-
-          const pw = document.getElementById('twitterPassword').value;
-          if (pw) body.twitterPassword = pw;
-          else if (!isEdit) body.twitterPassword = pw;
 
           if (isEdit) {
             // Update bot

@@ -4,8 +4,8 @@ import { join } from "path";
 
 export interface EnvConfig {
   TWITTER_HANDLE: string;
-  TWITTER_USERNAME: string;
-  TWITTER_PASSWORD: string;
+  TWITTER_USERNAME?: string;
+  TWITTER_PASSWORD?: string;
   SYNC_FREQUENCY_MIN?: string;
   SYNC_POSTS?: string;
   SYNC_PROFILE_DESCRIPTION?: string;
@@ -96,26 +96,25 @@ export async function importFromEnv(
       return { created, errors };
     }
 
+    // Import global Twitter auth from .env (use first available credentials)
+    const globalUsername = env.TWITTER_USERNAME;
+    const globalPassword = env.TWITTER_PASSWORD;
+    if (globalUsername && globalPassword) {
+      const hasAuth = await configService.hasTwitterAuth();
+      if (!hasAuth) {
+        await configService.setTwitterAuth(globalUsername, globalPassword);
+      }
+    }
+
     // Import each handle
     for (let i = 0; i < handles.length; i++) {
       const postfix = i === 0 ? "" : i.toString();
       const handle = handles[i];
 
       try {
-        // Get Twitter credentials
-        const username = env[`TWITTER_USERNAME${postfix}`] || env.TWITTER_USERNAME;
-        const password = env[`TWITTER_PASSWORD${postfix}`] || env.TWITTER_PASSWORD;
-
-        if (!username || !password) {
-          errors.push(`Missing Twitter credentials for handle ${handle}`);
-          continue;
-        }
-
-        // Create bot config
+        // Create bot config (Twitter auth is global now)
         const botConfig = await configService.createBotConfig({
           twitterHandle: handle.replace("@", ""),
-          twitterUsername: username,
-          twitterPassword: password,
           syncFrequencyMin: env.SYNC_FREQUENCY_MIN
             ? parseInt(env.SYNC_FREQUENCY_MIN)
             : 30,
