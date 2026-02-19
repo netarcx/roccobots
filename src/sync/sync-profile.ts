@@ -46,7 +46,7 @@ async function upsertProfileCache(args: {
   let pfpChanged = false;
 
   const cPfpUrl = row?.pfpUrl ?? "";
-  const cPfpHash = row?.bannerHash ?? "";
+  const cPfpHash = row?.pfpHash ?? "";
   let pfpHash = "";
   let pfpBlob: File | undefined = undefined;
 

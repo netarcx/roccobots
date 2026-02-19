@@ -105,9 +105,12 @@ export class BotInstance extends EventEmitter {
           text: `Connecting to ${factory.DISPLAY_NAME}`,
         }).start();
 
+        // Merge factory fallback values (e.g. BLUESKY_INSTANCE defaults)
+        const env = { ...factory.FALLBACK_ENV, ...platform.credentials } as any;
+
         const synchronizer = await factory.create({
           xClient: this.xClient,
-          env: platform.credentials as any,
+          env,
           db: this.db,
           slot: this.config.id,
           log,

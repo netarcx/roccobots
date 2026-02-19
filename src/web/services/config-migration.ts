@@ -136,10 +136,13 @@ export async function importFromEnv(
 
         if (blueskyId && blueskyPw) {
           try {
+            const blueskyInstance =
+              env[`BLUESKY_INSTANCE${postfix}`] || env.BLUESKY_INSTANCE || "bsky.social";
             await configService.createPlatformConfig({
               botConfigId: botConfig.id,
               platformId: "bluesky",
               credentials: {
+                BLUESKY_INSTANCE: blueskyInstance,
                 BLUESKY_IDENTIFIER: blueskyId,
                 BLUESKY_PASSWORD: blueskyPw,
               },

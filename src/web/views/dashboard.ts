@@ -67,22 +67,28 @@ export function dashboardPage(): string {
         return Math.floor(hrs / 24) + 'd ago';
       }
 
+      function esc(str) {
+        const d = document.createElement('div');
+        d.textContent = str;
+        return d.innerHTML;
+      }
+
       function renderBotCard(bot) {
         const status = bot.status?.status || 'stopped';
         const statusClass = statusColors[status] || statusColors.stopped;
         const platforms = (bot.platforms || []).map(p =>
-          '<span class="text-xs px-1.5 py-0.5 rounded ' + (platformColors[p.platformId] || 'bg-slate-500/20 text-slate-400') + '">' + (p.platformId) + '</span>'
+          '<span class="text-xs px-1.5 py-0.5 rounded ' + (platformColors[p.platformId] || 'bg-slate-500/20 text-slate-400') + '">' + esc(p.platformId) + '</span>'
         ).join(' ');
 
         const lastSync = bot.status?.lastSyncAt ? timeAgo(bot.status.lastSyncAt) : 'Never';
         const nextSync = bot.status?.nextSyncAt ? timeAgo(bot.status.nextSyncAt) : '-';
         const errorMsg = status === 'error' && bot.status?.errorMessage
-          ? '<div class="mt-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded p-2 truncate">' + bot.status.errorMessage + '</div>'
+          ? '<div class="mt-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded p-2 truncate">' + esc(bot.status.errorMessage) + '</div>'
           : '';
 
         return '<div class="bg-slate-800 border border-slate-700 rounded-lg p-4" data-bot-id="' + bot.id + '">' +
           '<div class="flex items-center justify-between mb-2">' +
-            '<h3 class="font-semibold text-slate-100">@' + bot.twitterHandle + '</h3>' +
+            '<h3 class="font-semibold text-slate-100">@' + esc(bot.twitterHandle) + '</h3>' +
             '<span class="text-xs font-medium px-2 py-0.5 rounded ' + statusClass + '">' + status + '</span>' +
           '</div>' +
           '<div class="text-xs text-slate-400 space-y-1 mb-3">' +
