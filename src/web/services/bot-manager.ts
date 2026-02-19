@@ -39,6 +39,8 @@ export class BotManager extends EventEmitter {
   constructor(db: DBType) {
     super();
     this.db = db;
+    // Allow many SSE clients (each adds 4 listeners)
+    this.setMaxListeners(50);
   }
 
   /**

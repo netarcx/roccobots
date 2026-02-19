@@ -267,4 +267,8 @@ botsRouter.get("/:id/logs", async (c) => {
   }
 });
 
+// Compose platform routes under the bots router so they share the same mount point
+import platformsRouter from "./platforms";
+botsRouter.route("/", platformsRouter);
+
 export default botsRouter;

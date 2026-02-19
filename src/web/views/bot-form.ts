@@ -304,6 +304,7 @@ export function botFormPage(bot?: BotData): string {
 
             // Save platforms
             const platforms = collectPlatforms();
+            const platformErrors = [];
             for (const p of platforms) {
               // Try update first, then create
               const updateRes = await fetch('/api/bots/' + botId + '/platforms/' + p.platformId, {
@@ -311,17 +312,25 @@ export function botFormPage(bot?: BotData): string {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ credentials: p.credentials, enabled: p.enabled }),
               });
-              if (updateRes.status === 400) {
+              if (!updateRes.ok) {
                 // Platform doesn't exist yet, create it
-                await fetch('/api/bots/' + botId + '/platforms', {
+                const createRes = await fetch('/api/bots/' + botId + '/platforms', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify(p),
                 });
+                if (!createRes.ok) {
+                  const d = await createRes.json().catch(() => ({}));
+                  platformErrors.push(p.platformId + ': ' + (d.error || 'save failed'));
+                }
               }
             }
 
-            showToast('Changes saved', 'success');
+            if (platformErrors.length > 0) {
+              showToast('Bot saved but platform errors: ' + platformErrors.join(', '), 'error');
+            } else {
+              showToast('Changes saved', 'success');
+            }
           } else {
             // Create bot
             const res = await fetch('/api/bots', {
@@ -336,12 +345,20 @@ export function botFormPage(bot?: BotData): string {
             // Save platforms for new bot
             if (newBotId) {
               const platforms = collectPlatforms();
+              const platformErrors = [];
               for (const p of platforms) {
-                await fetch('/api/bots/' + newBotId + '/platforms', {
+                const pRes = await fetch('/api/bots/' + newBotId + '/platforms', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify(p),
                 });
+                if (!pRes.ok) {
+                  const d = await pRes.json().catch(() => ({}));
+                  platformErrors.push(p.platformId + ': ' + (d.error || 'save failed'));
+                }
+              }
+              if (platformErrors.length > 0) {
+                showToast('Bot created but platform errors: ' + platformErrors.join(', '), 'error');
               }
             }
 

@@ -20,6 +20,26 @@ eventsRouter.get("/", async (c) => {
   const botManager = c.get("botManager");
 
   return streamSSE(c, async (stream) => {
+    let cleaned = false;
+
+    function cleanup() {
+      if (cleaned) return;
+      cleaned = true;
+      clearInterval(keepaliveInterval);
+      botManager.off("log", logHandler);
+      botManager.off("statusChange", statusHandler);
+      botManager.off("botStarted", botStartedHandler);
+      botManager.off("botStopped", botStoppedHandler);
+    }
+
+    function safeSend(data: { data: string; event: string }) {
+      try {
+        stream.writeSSE(data).catch(() => cleanup());
+      } catch {
+        cleanup();
+      }
+    }
+
     // Send initial connection message
     await stream.writeSSE({
       data: JSON.stringify({
@@ -31,46 +51,32 @@ eventsRouter.get("/", async (c) => {
 
     // Log event handler
     const logHandler = (log: any) => {
-      stream.writeSSE({
-        data: JSON.stringify({
-          type: "log",
-          ...log,
-        }),
+      safeSend({
+        data: JSON.stringify({ type: "log", ...log }),
         event: "log",
       });
     };
 
     // Status change handler
     const statusHandler = (status: any) => {
-      stream.writeSSE({
-        data: JSON.stringify({
-          type: "statusChange",
-          ...status,
-        }),
+      safeSend({
+        data: JSON.stringify({ type: "statusChange", ...status }),
         event: "statusChange",
       });
     };
 
     // Bot started handler
     const botStartedHandler = (botId: number) => {
-      stream.writeSSE({
-        data: JSON.stringify({
-          type: "botStarted",
-          botId,
-          timestamp: new Date().toISOString(),
-        }),
+      safeSend({
+        data: JSON.stringify({ type: "botStarted", botId, timestamp: new Date().toISOString() }),
         event: "botStarted",
       });
     };
 
     // Bot stopped handler
     const botStoppedHandler = (botId: number) => {
-      stream.writeSSE({
-        data: JSON.stringify({
-          type: "botStopped",
-          botId,
-          timestamp: new Date().toISOString(),
-        }),
+      safeSend({
+        data: JSON.stringify({ type: "botStopped", botId, timestamp: new Date().toISOString() }),
         event: "botStopped",
       });
     };
@@ -83,23 +89,14 @@ eventsRouter.get("/", async (c) => {
 
     // Send keepalive every 30 seconds
     const keepaliveInterval = setInterval(() => {
-      stream.writeSSE({
-        data: JSON.stringify({
-          type: "keepalive",
-          timestamp: new Date().toISOString(),
-        }),
+      safeSend({
+        data: JSON.stringify({ type: "keepalive", timestamp: new Date().toISOString() }),
         event: "keepalive",
       });
     }, 30000);
 
     // Clean up on disconnect
-    stream.onAbort(() => {
-      clearInterval(keepaliveInterval);
-      botManager.off("log", logHandler);
-      botManager.off("statusChange", statusHandler);
-      botManager.off("botStarted", botStartedHandler);
-      botManager.off("botStopped", botStoppedHandler);
-    });
+    stream.onAbort(() => cleanup());
 
     // Keep the stream open
     await stream.sleep(1000000000);
