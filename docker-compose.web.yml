@@ -2,8 +2,7 @@ services:
   roccobots-web:
     container_name: "roccobots-web"
 
-    build:
-      context: ./
+    image: ghcr.io/netarcx/roccobots:latest
 
     restart: unless-stopped
 
