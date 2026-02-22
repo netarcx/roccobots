@@ -9,3 +9,5 @@ __test__
 *.sqlite
 *.db
 *.env
+data/
+.claude/
