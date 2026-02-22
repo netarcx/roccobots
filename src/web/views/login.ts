@@ -1,10 +1,10 @@
 import { layout } from "./layout";
 
 export function loginPage(): string {
-    return layout({
-        title: "Login",
-        authenticated: false,
-        content: `
+  return layout({
+    title: "Login",
+    authenticated: false,
+    content: `
     <div class="flex items-center justify-center min-h-[80vh]">
       <div class="bg-slate-800 border border-slate-700 rounded-lg p-8 w-full max-w-sm">
         <h1 class="text-2xl font-bold text-blue-400 text-center mb-6">RoccoBots</h1>
@@ -21,7 +21,7 @@ export function loginPage(): string {
         </form>
       </div>
     </div>`,
-        scripts: `
+    scripts: `
     <script>
       async function handleLogin(e) {
         e.preventDefault();
@@ -44,5 +44,5 @@ export function loginPage(): string {
         }
       }
     </script>`,
-    });
+  });
 }

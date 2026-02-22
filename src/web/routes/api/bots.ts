@@ -1,8 +1,11 @@
 import { Hono } from "hono";
-import { requireAuth } from "../../middleware/auth";
-import { ConfigService } from "../../services/config-service";
-import { BotManager } from "../../services/bot-manager";
 import { z } from "zod";
+
+import { requireAuth } from "../../middleware/auth";
+import { BotManager } from "../../services/bot-manager";
+import { ConfigService } from "../../services/config-service";
+// Compose platform routes under the bots router so they share the same mount point
+import platformsRouter from "./platforms";
 
 const botsRouter = new Hono<{
   Variables: {
@@ -265,8 +268,6 @@ botsRouter.get("/:id/logs", async (c) => {
   }
 });
 
-// Compose platform routes under the bots router so they share the same mount point
-import platformsRouter from "./platforms";
 botsRouter.route("/", platformsRouter);
 
 export default botsRouter;

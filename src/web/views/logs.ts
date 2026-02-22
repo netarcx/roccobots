@@ -1,10 +1,10 @@
 import { layout } from "./layout";
 
 export function logsPage(botId: number, twitterHandle: string): string {
-    return layout({
-        title: `Logs - @${twitterHandle}`,
-        authenticated: true,
-        content: `
+  return layout({
+    title: `Logs - @${twitterHandle}`,
+    authenticated: true,
+    content: `
     <div class="max-w-4xl mx-auto">
       <div class="flex items-center gap-3 mb-6">
         <a href="/bots/${botId}" class="text-slate-400 hover:text-slate-200 transition-colors">&larr;</a>
@@ -36,7 +36,7 @@ export function logsPage(botId: number, twitterHandle: string): string {
         </div>
       </div>
     </div>`,
-        scripts: `
+    scripts: `
     <script>
       const botId = ${botId};
       let allLogs = [];
@@ -150,5 +150,5 @@ export function logsPage(botId: number, twitterHandle: string): string {
 
       loadLogs();
     </script>`,
-    });
+  });
 }

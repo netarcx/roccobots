@@ -72,9 +72,7 @@ export async function migrate(
 
   // Drop legacy unique index on twitter_handle (allows multiple bots per handle)
   try {
-    db.run(
-      "DROP INDEX IF EXISTS bot_configs_twitter_handle_unique",
-    );
+    db.run("DROP INDEX IF EXISTS bot_configs_twitter_handle_unique");
   } catch (_) {
     // Ignore if index doesn't exist
   }
@@ -88,16 +86,32 @@ export async function migrate(
     updated_at integer NOT NULL
   )`);
 
+  // Ensure command_configs table exists
+  db.run(`CREATE TABLE IF NOT EXISTS command_configs (
+    bot_config_id integer PRIMARY KEY REFERENCES bot_configs(id) ON DELETE CASCADE,
+    enabled integer NOT NULL DEFAULT 0,
+    trusted_handles text NOT NULL DEFAULT '[]',
+    poll_interval_sec integer NOT NULL DEFAULT 60,
+    response_messages text,
+    last_seen_at text,
+    created_at integer NOT NULL,
+    updated_at integer NOT NULL
+  )`);
+
   // Backfill twitter_auth from first bot's credentials if table is empty
   try {
-    const authCount = db
-      .all("SELECT COUNT(*) as count FROM twitter_auth") as any[];
+    const authCount = db.all(
+      "SELECT COUNT(*) as count FROM twitter_auth",
+    ) as any[];
     if (authCount[0]?.count === 0 || authCount[0]?.["COUNT(*)"] === 0) {
-      const firstBot = db
-        .all(
-          "SELECT twitter_username, twitter_password FROM bot_configs ORDER BY id ASC LIMIT 1",
-        ) as any[];
-      if (firstBot.length > 0 && firstBot[0].twitter_username && firstBot[0].twitter_password) {
+      const firstBot = db.all(
+        "SELECT twitter_username, twitter_password FROM bot_configs ORDER BY id ASC LIMIT 1",
+      ) as any[];
+      if (
+        firstBot.length > 0 &&
+        firstBot[0].twitter_username &&
+        firstBot[0].twitter_password
+      ) {
         const now = Date.now();
         db.run(
           `INSERT INTO twitter_auth (id, username, password, created_at, updated_at) VALUES (1, '${firstBot[0].twitter_username}', '${firstBot[0].twitter_password}', ${now}, ${now})`,

@@ -4,6 +4,8 @@ import { eq, lt } from "drizzle-orm";
 import { LOG_RETENTION_DAYS } from "env";
 import { EventEmitter } from "events";
 import { BotConfig, BotInstance, BotInstanceStatus } from "sync/bot-instance";
+import { CommandPoller } from "sync/commands/command-poller";
+import { CommandExecutor, SettingKey } from "sync/commands/command-types";
 import { createTwitterClient } from "sync/x-client";
 import { sendNotification } from "utils/notifications";
 
@@ -36,6 +38,7 @@ export type BotManagerEvents = {
  */
 export class BotManager extends EventEmitter {
   private bots: Map<number, BotInstance> = new Map();
+  private commandPollers: Map<number, CommandPoller> = new Map();
   private db: DBType;
   private configService: ConfigService;
   private xClient: XClient | null = null;
@@ -187,6 +190,146 @@ export class BotManager extends EventEmitter {
     const bot = new BotInstance(config, this.db, xClient);
 
     // Set up event forwarding
+    this.setupBotEvents(botId, bot);
+
+    // Start the bot
+    await bot.start();
+
+    // Store in map
+    this.bots.set(botId, bot);
+    this.emit("botStarted", botId);
+
+    // Start command poller if configured
+    await this.startCommandPoller(botId, config);
+  }
+
+  /**
+   * Start a command poller for a bot if commands are enabled and Bluesky is configured
+   */
+  private async startCommandPoller(
+    botId: number,
+    config: BotConfig,
+  ): Promise<void> {
+    try {
+      // Stop existing poller if any (prevents duplicates)
+      const existingPoller = this.commandPollers.get(botId);
+      if (existingPoller) {
+        existingPoller.stop();
+        this.commandPollers.delete(botId);
+      }
+
+      const cmdConfig = await this.configService.getCommandConfig(botId);
+      if (!cmdConfig || !cmdConfig.enabled) return;
+
+      // Find Bluesky platform credentials
+      const bskyPlatform = config.platforms.find(
+        (p) => p.platformId === "bluesky" && p.enabled,
+      );
+      if (!bskyPlatform) return;
+
+      const executor: CommandExecutor = {
+        restart: async (id: number) => {
+          const oldBot = this.bots.get(id);
+          if (oldBot) {
+            oldBot.stop();
+            this.bots.delete(id);
+          }
+          // Reload config and restart
+          try {
+            const newConfig = await this.loadBotConfig(id);
+            const xClient = await this.ensureXClient();
+            const newBot = new BotInstance(newConfig, this.db, xClient);
+            this.setupBotEvents(id, newBot);
+            await newBot.start();
+            this.bots.set(id, newBot);
+          } catch (error) {
+            // Update status so dashboard reflects the failure
+            await this.updateBotStatusInDB(id, {
+              status: "error",
+              errorMessage:
+                error instanceof Error ? error.message : String(error),
+            });
+            throw error;
+          }
+        },
+        sync: async (id: number) => {
+          const bot = this.bots.get(id);
+          if (bot) await bot.triggerSync();
+        },
+        changeSource: async (id: number, newHandle: string) => {
+          await this.configService.updateBotConfig(id, {
+            twitterHandle: newHandle,
+          });
+          await executor.restart(id);
+        },
+        getSource: async (id: number) => {
+          const botConfig = await this.configService.getBotConfigById(id);
+          return botConfig.twitterHandle;
+        },
+        getStatus: async (id: number) => {
+          const cfg = await this.configService.getBotConfigById(id);
+          const onOff = (v: boolean) => (v ? "on" : "off");
+          return [
+            `@${cfg.twitterHandle} settings:`,
+            `Frequency: ${cfg.syncFrequencyMin} min`,
+            `Posts: ${onOff(cfg.syncPosts)} | Bio: ${onOff(cfg.syncProfileDescription)} | Avatar: ${onOff(cfg.syncProfilePicture)}`,
+            `Name: ${onOff(cfg.syncProfileName)} | Header: ${onOff(cfg.syncProfileHeader)} | Backdate: ${onOff(cfg.backdateBlueskyPosts)}`,
+          ].join("\n");
+        },
+        setSetting: async (id: number, key: SettingKey, value: unknown) => {
+          const fieldMap: Record<SettingKey, string> = {
+            frequency: "syncFrequencyMin",
+            posts: "syncPosts",
+            bio: "syncProfileDescription",
+            avatar: "syncProfilePicture",
+            name: "syncProfileName",
+            header: "syncProfileHeader",
+            backdate: "backdateBlueskyPosts",
+          };
+          const field = fieldMap[key];
+          await this.configService.updateBotConfig(id, {
+            [field]: value,
+          });
+        },
+      };
+
+      const poller = new CommandPoller({
+        botId,
+        config: cmdConfig,
+        credentials: {
+          instance:
+            bskyPlatform.credentials["BLUESKY_INSTANCE"] || "bsky.social",
+          identifier: bskyPlatform.credentials["BLUESKY_IDENTIFIER"],
+          password: bskyPlatform.credentials["BLUESKY_PASSWORD"],
+        },
+        executor,
+        lastSeenAt: cmdConfig.lastSeenAt,
+        onLastSeenAtUpdate: (id, ts) =>
+          this.configService.updateLastSeenAt(id, ts),
+      });
+
+      // Forward log events
+      poller.on("log", (logData) => {
+        const log: BotLogEvent = {
+          botId,
+          ...logData,
+          timestamp: new Date(),
+        };
+        this.emit("log", log);
+        this.saveLogToDB(log);
+      });
+
+      await poller.start();
+      this.commandPollers.set(botId, poller);
+    } catch (error) {
+      console.error(`Failed to start command poller for bot ${botId}:`, error);
+    }
+  }
+
+  /**
+   * Set up event forwarding for a bot instance
+   */
+  private setupBotEvents(botId: number, bot: BotInstance): void {
     bot.on("log", (logData) => {
       const log: BotLogEvent = {
         botId,
@@ -211,13 +354,6 @@ export class BotManager extends EventEmitter {
         `bot-error-${botId}`,
       );
     });
-
-    // Start the bot
-    await bot.start();
-
-    // Store in map
-    this.bots.set(botId, bot);
-    this.emit("botStarted", botId);
   }
 
   /**
@@ -227,6 +363,13 @@ export class BotManager extends EventEmitter {
     const bot = this.bots.get(botId);
     if (!bot) {
       throw new Error(`Bot ${botId} is not running`);
+    }
+
+    // Stop command poller
+    const poller = this.commandPollers.get(botId);
+    if (poller) {
+      poller.stop();
+      this.commandPollers.delete(botId);
     }
 
     bot.stop();
@@ -304,6 +447,15 @@ export class BotManager extends EventEmitter {
     if (this.pruneInterval) {
       clearInterval(this.pruneInterval);
       this.pruneInterval = null;
+    }
+    // Stop all command pollers
+    for (const [botId, poller] of this.commandPollers.entries()) {
+      try {
+        poller.stop();
+        this.commandPollers.delete(botId);
+      } catch (error) {
+        console.error(`Failed to stop command poller ${botId}:`, error);
+      }
     }
     for (const [botId, bot] of this.bots.entries()) {
       try {

@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
+
 import { requireAuth } from "../../middleware/auth";
 import { BotManager } from "../../services/bot-manager";
 
@@ -68,7 +69,11 @@ eventsRouter.get("/", async (c) => {
     // Bot started handler
     const botStartedHandler = (botId: number) => {
       safeSend({
-        data: JSON.stringify({ type: "botStarted", botId, timestamp: new Date().toISOString() }),
+        data: JSON.stringify({
+          type: "botStarted",
+          botId,
+          timestamp: new Date().toISOString(),
+        }),
         event: "botStarted",
       });
     };
@@ -76,7 +81,11 @@ eventsRouter.get("/", async (c) => {
     // Bot stopped handler
     const botStoppedHandler = (botId: number) => {
       safeSend({
-        data: JSON.stringify({ type: "botStopped", botId, timestamp: new Date().toISOString() }),
+        data: JSON.stringify({
+          type: "botStopped",
+          botId,
+          timestamp: new Date().toISOString(),
+        }),
         event: "botStopped",
       });
     };
@@ -90,7 +99,10 @@ eventsRouter.get("/", async (c) => {
     // Send keepalive every 30 seconds
     const keepaliveInterval = setInterval(() => {
       safeSend({
-        data: JSON.stringify({ type: "keepalive", timestamp: new Date().toISOString() }),
+        data: JSON.stringify({
+          type: "keepalive",
+          timestamp: new Date().toISOString(),
+        }),
         event: "keepalive",
       });
     }, 30000);

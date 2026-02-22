@@ -1,13 +1,13 @@
 export interface LayoutOptions {
-    title: string;
-    content: string;
-    scripts?: string;
-    authenticated?: boolean;
+  title: string;
+  content: string;
+  scripts?: string;
+  authenticated?: boolean;
 }
 
 function nav(authenticated: boolean): string {
-    if (!authenticated) return "";
-    return `
+  if (!authenticated) return "";
+  return `
     <nav class="bg-slate-800 border-b border-slate-700">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex items-center justify-between h-14">
@@ -26,7 +26,7 @@ function nav(authenticated: boolean): string {
 }
 
 function toastContainer(): string {
-    return `
+  return `
     <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
     <script>
       function showToast(message, type = 'info', duration = 5000) {
@@ -61,7 +61,7 @@ function toastContainer(): string {
 }
 
 export function layout(opts: LayoutOptions): string {
-    return `<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">

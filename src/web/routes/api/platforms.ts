@@ -1,7 +1,8 @@
 import { Hono } from "hono";
+import { z } from "zod";
+
 import { requireAuth } from "../../middleware/auth";
 import { ConfigService } from "../../services/config-service";
-import { z } from "zod";
 
 const platformsRouter = new Hono<{
   Variables: {

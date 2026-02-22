@@ -1,6 +1,7 @@
 import { Hono } from "hono";
-import { login, logout, isAuthenticated } from "../../middleware/auth";
 import { z } from "zod";
+
+import { isAuthenticated, login, logout } from "../../middleware/auth";
 
 const authRouter = new Hono();
 

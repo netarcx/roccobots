@@ -18,9 +18,7 @@ export const BotConfigs = sqliteTable("bot_configs", {
   twitterPassword: text("twitter_password").notNull(), // encrypted
   enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
   syncFrequencyMin: integer("sync_frequency_min").notNull().default(30),
-  syncPosts: integer("sync_posts", { mode: "boolean" })
-    .notNull()
-    .default(true),
+  syncPosts: integer("sync_posts", { mode: "boolean" }).notNull().default(true),
   syncProfileDescription: integer("sync_profile_description", {
     mode: "boolean",
   })
@@ -109,6 +107,26 @@ export const TwitterAuth = sqliteTable("twitter_auth", {
   id: integer("id").primaryKey().default(1),
   username: text("username").notNull(),
   password: text("password").notNull(), // encrypted
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+    .notNull()
+    .$defaultFn(() => new Date()),
+});
+
+/**
+ * Command configs - per-bot Bluesky command handler settings
+ */
+export const CommandConfigs = sqliteTable("command_configs", {
+  botConfigId: integer("bot_config_id")
+    .primaryKey()
+    .references(() => BotConfigs.id, { onDelete: "cascade" }),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(false),
+  trustedHandles: text("trusted_handles").notNull().default("[]"), // JSON array of Bluesky handles
+  pollIntervalSec: integer("poll_interval_sec").notNull().default(60),
+  responseMessages: text("response_messages"), // JSON ResponseMessages, nullable (null = defaults)
+  lastSeenAt: text("last_seen_at"), // ISO timestamp for notification dedup
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .$defaultFn(() => new Date()),

@@ -19,7 +19,6 @@ import {
 } from "sync/platforms/bluesky/utils";
 import { parseBlobForBluesky } from "sync/platforms/bluesky/utils/parse-blob-for-bluesky";
 import { splitTextForBluesky } from "sync/platforms/bluesky/utils/split-text";
-
 import { getPostStore, getPostStoreStr } from "utils/get-post-store";
 import { logError, oraProgress } from "utils/logs";
 import { getPostExcerpt } from "utils/post/get-post-excerpt";
@@ -151,13 +150,13 @@ export const BlueskySynchronizerFactory: SynchronizerFactory<
         const quoteRecord: $Typed<AppBskyEmbedRecord.Main> | undefined =
           post.quotePost
             ? {
-              $type: "app.bsky.embed.record",
-              record: {
-                $type: "com.atproto.repo.strongRef",
-                cid: post.quotePost.cid,
-                uri: post.quotePost.uri,
-              },
-            }
+                $type: "app.bsky.embed.record",
+                record: {
+                  $type: "com.atproto.repo.strongRef",
+                  cid: post.quotePost.cid,
+                  uri: post.quotePost.uri,
+                },
+              }
             : undefined;
 
         let media:
@@ -283,7 +282,9 @@ export const BlueskySynchronizerFactory: SynchronizerFactory<
           const richText = new RichText({ text: chunk });
           await richText.detectFacets(agent);
 
-          const createdAt = (BACKDATE_BLUESKY_POSTS ? tweet.datetime : new Date(Date.now())).toISOString();
+          const createdAt = (
+            BACKDATE_BLUESKY_POSTS ? tweet.datetime : new Date(Date.now())
+          ).toISOString();
           const data: $Typed<AppBskyFeedPost.Record> = {
             $type: "app.bsky.feed.post",
             text: richText.text,
@@ -313,7 +314,7 @@ export const BlueskySynchronizerFactory: SynchronizerFactory<
             );
           }
           log.text = `☁️ | post sending: ${getPostExcerpt(post.tweet.text ?? VOID)}`;
-          if (DEBUG) console.log("data", data)
+          if (DEBUG) console.log("data", data);
           const createdPost = await agent.post(data);
           oraProgress(
             log,
@@ -321,7 +322,7 @@ export const BlueskySynchronizerFactory: SynchronizerFactory<
             i,
             post.chunks.length,
           );
-          if (DEBUG) console.log("createdPost", createdPost)
+          if (DEBUG) console.log("createdPost", createdPost);
           chunkReferences.push({
             cid: createdPost.cid,
             uri: createdPost.uri,

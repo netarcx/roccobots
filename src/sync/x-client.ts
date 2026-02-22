@@ -1,10 +1,11 @@
 import { Scraper } from "@the-convocation/twitter-scraper";
-import { cycleTLSFetch } from '@the-convocation/twitter-scraper/cycletls';
-export { cycleTLSExit } from '@the-convocation/twitter-scraper/cycletls';
+import { cycleTLSFetch } from "@the-convocation/twitter-scraper/cycletls";
 import { DBType, Schema } from "db";
 import { eq } from "drizzle-orm";
 import ora from "ora";
 import { oraPrefixer } from "utils/logs";
+
+export { cycleTLSExit } from "@the-convocation/twitter-scraper/cycletls";
 
 export async function createTwitterClient({
   twitterPassword,
@@ -22,8 +23,8 @@ export async function createTwitterClient({
 
   const client = new Scraper({
     experimental: {
-    xClientTransactionId: true,
-    xpff: true,
+      xClientTransactionId: true,
+      xpff: true,
     },
     fetch: cycleTLSFetch,
     rateLimitStrategy: {

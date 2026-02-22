@@ -1,10 +1,10 @@
 import { layout } from "./layout";
 
 export function dashboardPage(): string {
-    return layout({
-        title: "Dashboard",
-        authenticated: true,
-        content: `
+  return layout({
+    title: "Dashboard",
+    authenticated: true,
+    content: `
     <!-- Twitter Auth Warning -->
     <div id="twitter-auth-warning" class="hidden bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 mb-6">
       <div class="flex items-center gap-3">
@@ -50,7 +50,7 @@ export function dashboardPage(): string {
     <div id="bots-list" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
       <div class="text-slate-400 text-sm">Loading bots...</div>
     </div>`,
-        scripts: `
+    scripts: `
     <script>
       let eventSource = null;
 
@@ -241,5 +241,5 @@ export function dashboardPage(): string {
       connectSSE();
       checkTwitterAuth();
     </script>`,
-    });
+  });
 }

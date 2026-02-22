@@ -1,7 +1,5 @@
 import { Tweet } from "@the-convocation/twitter-scraper";
 
-
-
 export interface ValidPost extends Tweet {
   id: string;
 }

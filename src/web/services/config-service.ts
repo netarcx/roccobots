@@ -1,6 +1,17 @@
 import { DBType, Schema } from "db";
-import { eq, and, desc } from "drizzle-orm";
-import { encrypt, decrypt, encryptJSON, decryptJSON } from "./encryption-service";
+import { and, desc, eq } from "drizzle-orm";
+import {
+  CommandConfig,
+  DEFAULT_RESPONSES,
+  ResponseMessages,
+} from "sync/commands/command-types";
+
+import {
+  decrypt,
+  decryptJSON,
+  encrypt,
+  encryptJSON,
+} from "./encryption-service";
 
 export interface TwitterAuthOutput {
   username: string;
@@ -209,14 +220,12 @@ export class ConfigService {
     // Encrypt credentials
     const encryptedCredentials = encryptJSON(input.credentials);
 
-    await this.db
-      .insert(Schema.PlatformConfigs)
-      .values({
-        botConfigId: input.botConfigId,
-        platformId: input.platformId,
-        enabled: input.enabled ?? true,
-        credentials: encryptedCredentials,
-      });
+    await this.db.insert(Schema.PlatformConfigs).values({
+      botConfigId: input.botConfigId,
+      platformId: input.platformId,
+      enabled: input.enabled ?? true,
+      credentials: encryptedCredentials,
+    });
 
     return this.getPlatformConfig(input.botConfigId, input.platformId);
   }
@@ -249,7 +258,9 @@ export class ConfigService {
       botConfigId: Number(platformConfig.botConfigId),
       platformId: platformConfig.platformId,
       enabled: platformConfig.enabled,
-      credentials: decryptJSON<Record<string, string>>(platformConfig.credentials),
+      credentials: decryptJSON<Record<string, string>>(
+        platformConfig.credentials,
+      ),
       createdAt: new Date(Number(platformConfig.createdAt)),
       updatedAt: new Date(Number(platformConfig.updatedAt)),
     };
@@ -384,7 +395,10 @@ export class ConfigService {
   /**
    * Get decrypted Twitter auth credentials (for internal use only)
    */
-  async getTwitterAuthDecrypted(): Promise<{ username: string; password: string } | null> {
+  async getTwitterAuthDecrypted(): Promise<{
+    username: string;
+    password: string;
+  } | null> {
     const row = await this.db
       .select()
       .from(Schema.TwitterAuth)
@@ -432,5 +446,114 @@ export class ConfigService {
       .get();
 
     return !!row;
+  }
+
+  /**
+   * Get command config for a bot, returns null if not configured
+   */
+  async getCommandConfig(botId: number): Promise<CommandConfig | null> {
+    const row = await this.db
+      .select()
+      .from(Schema.CommandConfigs)
+      .where(eq(Schema.CommandConfigs.botConfigId, botId))
+      .get();
+
+    if (!row) return null;
+
+    let responseMessages: ResponseMessages = { ...DEFAULT_RESPONSES };
+    if (row.responseMessages) {
+      try {
+        const parsed = JSON.parse(row.responseMessages);
+        responseMessages = { ...DEFAULT_RESPONSES, ...parsed };
+      } catch (_) {
+        // Use defaults on parse failure
+      }
+    }
+
+    let trustedHandles: string[] = [];
+    try {
+      trustedHandles = JSON.parse(row.trustedHandles);
+    } catch (_) {
+      // Use empty array on parse failure
+    }
+
+    return {
+      enabled: row.enabled,
+      trustedHandles,
+      pollIntervalSec: Number(row.pollIntervalSec),
+      responseMessages,
+      lastSeenAt: row.lastSeenAt,
+    };
+  }
+
+  /**
+   * Create or update command config for a bot
+   */
+  async upsertCommandConfig(
+    botId: number,
+    input: Partial<Omit<CommandConfig, "lastSeenAt" | "responseMessages">> & {
+      responseMessages?: Partial<ResponseMessages>;
+    },
+  ): Promise<CommandConfig> {
+    const now = new Date();
+
+    // Build trustedHandles JSON only if provided
+    const trustedHandlesJson =
+      input.trustedHandles !== undefined
+        ? JSON.stringify(input.trustedHandles)
+        : undefined;
+
+    // Only store non-default response messages (strip defaults)
+    let responseMessagesJson: string | null | undefined = undefined;
+    if (input.responseMessages !== undefined) {
+      responseMessagesJson = null;
+      const custom: Partial<ResponseMessages> = {};
+      for (const [key, val] of Object.entries(input.responseMessages)) {
+        if (val !== DEFAULT_RESPONSES[key as keyof ResponseMessages]) {
+          custom[key as keyof ResponseMessages] = val;
+        }
+      }
+      if (Object.keys(custom).length > 0) {
+        responseMessagesJson = JSON.stringify(custom);
+      }
+    }
+
+    // Build update set with only provided fields (avoids overwriting existing values)
+    const updateSet: Record<string, unknown> = { updatedAt: now };
+    if (input.enabled !== undefined) updateSet.enabled = input.enabled;
+    if (trustedHandlesJson !== undefined)
+      updateSet.trustedHandles = trustedHandlesJson;
+    if (input.pollIntervalSec !== undefined)
+      updateSet.pollIntervalSec = input.pollIntervalSec;
+    if (responseMessagesJson !== undefined)
+      updateSet.responseMessages = responseMessagesJson;
+
+    await this.db
+      .insert(Schema.CommandConfigs)
+      .values({
+        botConfigId: botId,
+        enabled: input.enabled ?? false,
+        trustedHandles: trustedHandlesJson ?? "[]",
+        pollIntervalSec: input.pollIntervalSec ?? 60,
+        responseMessages: responseMessagesJson ?? null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: Schema.CommandConfigs.botConfigId,
+        set: updateSet,
+      });
+
+    return (await this.getCommandConfig(botId))!;
+  }
+
+  /**
+   * Update lastSeenAt for notification dedup tracking
+   */
+  async updateLastSeenAt(botId: number, timestamp: string): Promise<void> {
+    await this.db
+      .update(Schema.CommandConfigs)
+      .set({ lastSeenAt: timestamp, updatedAt: new Date() })
+      .where(eq(Schema.CommandConfigs.botConfigId, botId));
   }
 }

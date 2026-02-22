@@ -1,14 +1,10 @@
 // Check if running in web mode
-if (process.env.WEB_MODE === "true") {
-  console.log("⚠️  WEB_MODE is enabled. Please use 'bun src/web-index.ts' instead.");
-  console.log("   Or unset WEB_MODE to run in CLI mode.");
-  process.exit(1);
-}
-
 import { db } from "db";
 import ora from "ora";
 import { BlueskySynchronizerFactory } from "sync/platforms/bluesky";
+import { DiscordWebhookSynchronizerFactory } from "sync/platforms/discord-webhook/webhook-sync";
 import { MastodonSynchronizerFactory } from "sync/platforms/mastodon/mastodon-sync";
+import { MisskeySynchronizerFactory } from "sync/platforms/misskey/missky-sync";
 import { syncPosts } from "sync/sync-posts";
 import { syncProfile } from "sync/sync-profile";
 import { TaggedSynchronizer } from "sync/synchronizer";
@@ -26,8 +22,14 @@ import {
   TWITTER_USERNAME,
   TwitterHandle,
 } from "./env";
-import { MisskeySynchronizerFactory } from "sync/platforms/misskey/missky-sync";
-import { DiscordWebhookSynchronizerFactory } from "sync/platforms/discord-webhook/webhook-sync";
+
+if (process.env.WEB_MODE === "true") {
+  console.log(
+    "⚠️  WEB_MODE is enabled. Please use 'bun src/web-index.ts' instead.",
+  );
+  console.log("   Or unset WEB_MODE to run in CLI mode.");
+  process.exit(1);
+}
 
 let interval: NodeJS.Timeout | null = null;
 process.on("exit", (code) => {
@@ -37,13 +39,17 @@ process.on("exit", (code) => {
 process.on("SIGINT", () => {
   console.log("\nReceived SIGINT (Ctrl+C). Exiting...");
   if (interval) clearInterval(interval); // stop daemon loop
-  try { cycleTLSExit(); } catch {}
+  try {
+    cycleTLSExit();
+  } catch {}
   process.exit(0);
 });
 
 process.on("SIGTERM", () => {
   console.log("Received SIGTERM. Exiting...");
-  try { cycleTLSExit(); } catch {}
+  try {
+    cycleTLSExit();
+  } catch {}
   process.exit(0);
 });
 
@@ -189,9 +195,9 @@ const syncAll = async () => {
         synchronizers: user.synchronizers,
         db,
       });
-      if (!SYNC_POSTS){
-        console.log("Posts will not be synced...")
-        continue
+      if (!SYNC_POSTS) {
+        console.log("Posts will not be synced...");
+        continue;
       }
       await syncPosts({
         db,

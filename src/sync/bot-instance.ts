@@ -1,14 +1,14 @@
-import { DBType } from "db";
 import { Scraper as XClient } from "@the-convocation/twitter-scraper";
+import { DBType } from "db";
+import { EventEmitter } from "events";
+import ora, { Ora } from "ora";
 import { BlueskySynchronizerFactory } from "sync/platforms/bluesky";
+import { DiscordWebhookSynchronizerFactory } from "sync/platforms/discord-webhook/webhook-sync";
 import { MastodonSynchronizerFactory } from "sync/platforms/mastodon/mastodon-sync";
 import { MisskeySynchronizerFactory } from "sync/platforms/misskey/missky-sync";
-import { DiscordWebhookSynchronizerFactory } from "sync/platforms/discord-webhook/webhook-sync";
 import { syncPosts } from "sync/sync-posts";
 import { syncProfile } from "sync/sync-profile";
-import { TaggedSynchronizer, SynchronizerFactory } from "sync/synchronizer";
-import ora, { Ora } from "ora";
-import { EventEmitter } from "events";
+import { SynchronizerFactory, TaggedSynchronizer } from "sync/synchronizer";
 
 export interface BotConfig {
   id: number;
@@ -87,7 +87,9 @@ export class BotInstance extends EventEmitter {
         continue;
       }
 
-      const factory = factories.find((f) => f.PLATFORM_ID === platform.platformId);
+      const factory = factories.find(
+        (f) => f.PLATFORM_ID === platform.platformId,
+      );
       if (!factory) {
         this.emitLog(
           "warn",
@@ -123,7 +125,11 @@ export class BotInstance extends EventEmitter {
         });
 
         log.succeed(`Connected to ${factory.DISPLAY_NAME}`);
-        this.emitLog("success", `Connected to ${factory.DISPLAY_NAME}`, platform.platformId);
+        this.emitLog(
+          "success",
+          `Connected to ${factory.DISPLAY_NAME}`,
+          platform.platformId,
+        );
       } catch (error) {
         this.emitLog(
           "error",
@@ -202,7 +208,9 @@ export class BotInstance extends EventEmitter {
       }
 
       const now = new Date();
-      const nextSync = new Date(now.getTime() + this.config.syncFrequencyMin * 60 * 1000);
+      const nextSync = new Date(
+        now.getTime() + this.config.syncFrequencyMin * 60 * 1000,
+      );
 
       this.updateStatus({
         status: "running",
@@ -214,14 +222,25 @@ export class BotInstance extends EventEmitter {
       this.emitLog("success", `@${this.config.twitterHandle} is up-to-date`);
       this.emit("syncComplete");
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       this.emitLog("error", `Sync failed: ${errorMessage}`);
       this.updateStatus({
         status: "error",
         errorMessage,
       });
-      this.emit("error", error instanceof Error ? error : new Error(String(error)));
+      this.emit(
+        "error",
+        error instanceof Error ? error : new Error(String(error)),
+      );
     }
+  }
+
+  /**
+   * Trigger an immediate sync cycle (used by command handler)
+   */
+  async triggerSync(): Promise<void> {
+    await this.performSync();
   }
 
   /**
@@ -240,18 +259,23 @@ export class BotInstance extends EventEmitter {
       await this.initializeSynchronizers();
 
       if (this.synchronizers.length === 0) {
-        throw new Error("No platforms configured or all platforms failed to initialize");
+        throw new Error(
+          "No platforms configured or all platforms failed to initialize",
+        );
       }
 
       // Perform initial sync
       await this.performSync();
 
       // Set up sync interval
-      this.syncInterval = setInterval(() => {
-        if (this.isRunning) {
-          this.performSync();
-        }
-      }, this.config.syncFrequencyMin * 60 * 1000);
+      this.syncInterval = setInterval(
+        () => {
+          if (this.isRunning) {
+            this.performSync();
+          }
+        },
+        this.config.syncFrequencyMin * 60 * 1000,
+      );
 
       this.emitLog(
         "info",
@@ -259,7 +283,8 @@ export class BotInstance extends EventEmitter {
       );
     } catch (error) {
       this.isRunning = false;
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       this.updateStatus({
         status: "error",
         errorMessage,

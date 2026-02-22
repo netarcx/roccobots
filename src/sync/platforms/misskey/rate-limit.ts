@@ -29,7 +29,7 @@ export async function withRateLimitRetry<TArgs extends any[], TResult>(
       if (waitTime > 0) {
         if (DEBUG) {
           console.log(
-            `[Misskey] Rate limit exceeded. Waiting ${Math.ceil(waitTime / 1000)}s...`
+            `[Misskey] Rate limit exceeded. Waiting ${Math.ceil(waitTime / 1000)}s...`,
           );
         }
         await new Promise((resolve) => setTimeout(resolve, waitTime));
@@ -38,8 +38,6 @@ export async function withRateLimitRetry<TArgs extends any[], TResult>(
     }
   }
 }
-
-
 
 export async function handleRateLimit(err: unknown): Promise<boolean> {
   const parsed = MisskeyRateLimitErrorSchema.safeParse(err);
@@ -54,7 +52,7 @@ export async function handleRateLimit(err: unknown): Promise<boolean> {
   if (waitTime > 0) {
     if (DEBUG) {
       console.log(
-        `[Misskey] Rate limit exceeded. Waiting ${Math.ceil(waitTime / 1000)}s...`
+        `[Misskey] Rate limit exceeded. Waiting ${Math.ceil(waitTime / 1000)}s...`,
       );
     }
     await new Promise((resolve) => setTimeout(resolve, waitTime));

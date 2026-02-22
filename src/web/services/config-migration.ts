@@ -1,6 +1,7 @@
-import { ConfigService } from "./config-service";
 import { readFileSync } from "fs";
 import { join } from "path";
+
+import { ConfigService } from "./config-service";
 
 export interface EnvConfig {
   TWITTER_HANDLE: string;
@@ -82,7 +83,8 @@ export async function importFromEnv(
     let handleIndex = 0;
 
     while (true) {
-      const key = handleIndex === 0 ? "TWITTER_HANDLE" : `TWITTER_HANDLE${handleIndex}`;
+      const key =
+        handleIndex === 0 ? "TWITTER_HANDLE" : `TWITTER_HANDLE${handleIndex}`;
       if (env[key]) {
         handles.push(env[key]);
         handleIndex++;
@@ -131,12 +133,15 @@ export async function importFromEnv(
         // Add Bluesky platform if configured
         const blueskyId =
           env[`BLUESKY_IDENTIFIER${postfix}`] || env.BLUESKY_IDENTIFIER;
-        const blueskyPw = env[`BLUESKY_PASSWORD${postfix}`] || env.BLUESKY_PASSWORD;
+        const blueskyPw =
+          env[`BLUESKY_PASSWORD${postfix}`] || env.BLUESKY_PASSWORD;
 
         if (blueskyId && blueskyPw) {
           try {
             const blueskyInstance =
-              env[`BLUESKY_INSTANCE${postfix}`] || env.BLUESKY_INSTANCE || "bsky.social";
+              env[`BLUESKY_INSTANCE${postfix}`] ||
+              env.BLUESKY_INSTANCE ||
+              "bsky.social";
             await configService.createPlatformConfig({
               botConfigId: botConfig.id,
               platformId: "bluesky",
@@ -179,7 +184,8 @@ export async function importFromEnv(
         // Add Misskey platform if configured
         const misskeyInstance =
           env[`MISSKEY_INSTANCE${postfix}`] || env.MISSKEY_INSTANCE;
-        const misskeyToken = env[`MISSKEY_TOKEN${postfix}`] || env.MISSKEY_TOKEN;
+        const misskeyToken =
+          env[`MISSKEY_TOKEN${postfix}`] || env.MISSKEY_TOKEN;
 
         if (misskeyInstance && misskeyToken) {
           try {
