@@ -1,23 +1,21 @@
 services:
-  roccobots:
-    # Use a descriptive container name
-    container_name: "roccobots"
+  roccobots-web:
+    container_name: "roccobots-web"
 
-    # The Docker image for the application    image: ghcr.io/yamada-sexta/touitomamout-next:latest
-    build:
-      context: ./  # ← This will build the image from the source code
-    # This policy ensures the container restarts automatically if it stops
+    image: ghcr.io/netarcx/roccobots:latest
+
     restart: unless-stopped
 
-    # Load all variables from the .env file in the same directory
-    env_file: ".env"
+    # Load web-specific environment variables
+    env_file: ".env.web"
 
-    # You can also set specific environment variables here
     environment:
       - DATABASE_PATH=/data/data.sqlite
 
-    # Mount a local directory to persist data (like the database)
-    # This ensures your post history isn't lost when the container is updated
+    ports:
+      - "3000:3000"
+
     volumes:
       - ./data:/data
 
+    command: ["bun", "./src/web-index.ts"]
