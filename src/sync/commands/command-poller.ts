@@ -31,6 +31,7 @@ export class CommandPoller extends EventEmitter {
   private pollInterval: ReturnType<typeof setInterval> | null = null;
   private lastSeenAt: string | null;
   private onLastSeenAtUpdate: (botId: number, ts: string) => Promise<void>;
+  private onConfigRefresh: (botId: number) => Promise<CommandConfig | null>;
   private polling = false;
 
   constructor(opts: {
@@ -40,6 +41,7 @@ export class CommandPoller extends EventEmitter {
     executor: CommandExecutor;
     lastSeenAt: string | null;
     onLastSeenAtUpdate: (botId: number, ts: string) => Promise<void>;
+    onConfigRefresh: (botId: number) => Promise<CommandConfig | null>;
   }) {
     super();
     this.botId = opts.botId;
@@ -48,6 +50,7 @@ export class CommandPoller extends EventEmitter {
     this.executor = opts.executor;
     this.lastSeenAt = opts.lastSeenAt;
     this.onLastSeenAtUpdate = opts.onLastSeenAtUpdate;
+    this.onConfigRefresh = opts.onConfigRefresh;
   }
 
   private emitLog(
@@ -97,6 +100,12 @@ export class CommandPoller extends EventEmitter {
     this.polling = true;
 
     try {
+      // Re-read config from DB so trusted handles / settings update without restart
+      const freshConfig = await this.onConfigRefresh(this.botId);
+      if (freshConfig) {
+        this.config = freshConfig;
+      }
+
       const res = await this.agent.listNotifications({ limit: 50 });
       const notifications = res.data.notifications;
 

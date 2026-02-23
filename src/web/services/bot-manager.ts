@@ -306,6 +306,7 @@ export class BotManager extends EventEmitter {
         lastSeenAt: cmdConfig.lastSeenAt,
         onLastSeenAtUpdate: (id, ts) =>
           this.configService.updateLastSeenAt(id, ts),
+        onConfigRefresh: (id) => this.configService.getCommandConfig(id),
       });
 
       // Forward log events
