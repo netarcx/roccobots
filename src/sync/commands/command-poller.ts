@@ -57,6 +57,8 @@ export class CommandPoller extends EventEmitter {
     level: CommandPollerLogEvent["level"],
     message: string,
   ): void {
+    const prefix = level === "error" ? "❌" : level === "warn" ? "⚠" : "📡";
+    console.log(`${prefix} [commands] ${message}`);
     this.emit("log", {
       level,
       message,
