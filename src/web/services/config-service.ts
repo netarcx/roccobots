@@ -5,6 +5,10 @@ import {
   DEFAULT_RESPONSES,
   ResponseMessages,
 } from "sync/commands/command-types";
+import {
+  TransformRulesConfig,
+  TransformRulesConfigSchema,
+} from "sync/transforms/transform-types";
 
 import {
   decrypt,
@@ -545,6 +549,41 @@ export class ConfigService {
       });
 
     return (await this.getCommandConfig(botId))!;
+  }
+
+  /**
+   * Get transform rules for a bot
+   */
+  async getTransformRules(botId: number): Promise<TransformRulesConfig | null> {
+    const row = await this.db
+      .select({ transformRules: Schema.BotConfigs.transformRules })
+      .from(Schema.BotConfigs)
+      .where(eq(Schema.BotConfigs.id, botId))
+      .get();
+
+    if (!row?.transformRules) return null;
+
+    try {
+      return TransformRulesConfigSchema.parse(JSON.parse(row.transformRules));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /**
+   * Set transform rules for a bot
+   */
+  async setTransformRules(
+    botId: number,
+    rules: TransformRulesConfig,
+  ): Promise<void> {
+    await this.db
+      .update(Schema.BotConfigs)
+      .set({
+        transformRules: JSON.stringify(rules),
+        updatedAt: new Date(),
+      })
+      .where(eq(Schema.BotConfigs.id, botId));
   }
 
   /**

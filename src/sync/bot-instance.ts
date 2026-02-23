@@ -9,6 +9,7 @@ import { MisskeySynchronizerFactory } from "sync/platforms/misskey/missky-sync";
 import { syncPosts } from "sync/sync-posts";
 import { syncProfile } from "sync/sync-profile";
 import { SynchronizerFactory, TaggedSynchronizer } from "sync/synchronizer";
+import { TransformRulesConfig } from "sync/transforms/transform-types";
 
 export interface BotConfig {
   id: number;
@@ -20,6 +21,7 @@ export interface BotConfig {
   syncProfileName: boolean;
   syncProfileHeader: boolean;
   backdateBlueskyPosts: boolean;
+  transformRules: TransformRulesConfig | null;
   platforms: {
     platformId: string;
     enabled: boolean;
@@ -61,6 +63,7 @@ export class BotInstance extends EventEmitter {
     status: "stopped",
   };
   private isRunning = false;
+  private isMuted = false;
 
   constructor(config: BotConfig, db: DBType, xClient: XClient) {
     super();
@@ -164,6 +167,11 @@ export class BotInstance extends EventEmitter {
    * Perform a sync cycle
    */
   private async performSync(): Promise<void> {
+    if (this.isMuted) {
+      this.emitLog("info", "Sync skipped (bot is muted)");
+      return;
+    }
+
     try {
       this.emitLog("info", `Starting sync for @${this.config.twitterHandle}`);
 
@@ -202,6 +210,7 @@ export class BotInstance extends EventEmitter {
           x: this.xClient,
           synchronizers: this.synchronizers,
           onLog,
+          transformRules: this.config.transformRules,
         });
       } else {
         this.emitLog("info", "Post syncing is disabled");
@@ -241,6 +250,29 @@ export class BotInstance extends EventEmitter {
    */
   async triggerSync(): Promise<void> {
     await this.performSync();
+  }
+
+  /**
+   * Mute the bot (pause syncing, keep polling)
+   */
+  mute(): void {
+    this.isMuted = true;
+    this.emitLog("info", "Bot muted — syncing paused");
+  }
+
+  /**
+   * Unmute the bot (resume syncing)
+   */
+  unmute(): void {
+    this.isMuted = false;
+    this.emitLog("info", "Bot unmuted — syncing resumed");
+  }
+
+  /**
+   * Check if bot is muted
+   */
+  get muted(): boolean {
+    return this.isMuted;
   }
 
   /**

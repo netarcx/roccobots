@@ -10,6 +10,12 @@ export interface ResponseMessages {
   status: string;
   settingChanged: string;
   invalidValue: string;
+  pin: string;
+  unpin: string;
+  mute: string;
+  unmute: string;
+  last: string;
+  stats: string;
 }
 
 export const DEFAULT_RESPONSES: ResponseMessages = {
@@ -20,11 +26,17 @@ export const DEFAULT_RESPONSES: ResponseMessages = {
   unauthorized: "You are not authorized to use commands.",
   error: "Command failed: {error}",
   unknown:
-    "Unknown command. Available: !sync, !restart, !source, !status, !frequency, !posts, !bio, !avatar, !name, !header, !backdate, !help",
-  help: "Commands: !sync, !restart, !source, !status, !frequency, !posts, !bio, !avatar, !name, !header, !backdate, !help",
+    "Unknown command. Available: !sync, !restart, !source, !status, !frequency, !posts, !bio, !avatar, !name, !header, !backdate, !pin, !unpin, !mute, !unmute, !last, !stats, !help",
+  help: "Commands: !sync, !restart, !source, !status, !frequency, !posts, !bio, !avatar, !name, !header, !backdate, !pin, !unpin, !mute, !unmute, !last, !stats, !help",
   status: "{status}",
   settingChanged: "{setting} set to {value}.",
   invalidValue: "Invalid value for !{command}. {hint}",
+  pin: "Post pinned!",
+  unpin: "Post unpinned!",
+  mute: "Bot muted. Syncing paused until !unmute.",
+  unmute: "Bot unmuted. Syncing resumed.",
+  last: "{url}",
+  stats: "{stats}",
 };
 
 export type SettingKey =
@@ -57,7 +69,13 @@ export interface ParsedCommand {
     | "avatar"
     | "name"
     | "header"
-    | "backdate";
+    | "backdate"
+    | "pin"
+    | "unpin"
+    | "mute"
+    | "unmute"
+    | "last"
+    | "stats";
   args: string[];
   raw: string;
 }
@@ -69,4 +87,10 @@ export interface CommandExecutor {
   getSource(botId: number): Promise<string>;
   getStatus(botId: number): Promise<string>;
   setSetting(botId: number, key: SettingKey, value: unknown): Promise<void>;
+  mute(botId: number): Promise<void>;
+  unmute(botId: number): Promise<void>;
+  getLastPost(
+    botId: number,
+  ): Promise<{ url: string; uri: string; cid: string } | null>;
+  getStats(botId: number): Promise<string>;
 }

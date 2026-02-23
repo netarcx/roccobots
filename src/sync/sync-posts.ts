@@ -12,9 +12,13 @@ import { toMetaPost } from "types/meta-tweet";
 import { isValidPost } from "types/post";
 import { logError, oraPrefixer } from "utils/logs";
 import { withRetry } from "utils/retry";
+import { extractWordsAndSpacers } from "utils/tweet/split-tweet-text/extract-words-and-spacers";
+import { buildChunksFromSplitterEntries } from "utils/tweet/split-tweet-text/split-tweet-text";
 
 import { getPostStore } from "../utils/get-post-store";
 import type { TaggedSynchronizer } from "./synchronizer";
+import { applyTransformRules } from "./transforms/apply-transforms";
+import { TransformRulesConfig } from "./transforms/transform-types";
 
 const MAX_TWEET = 200;
 
@@ -34,8 +38,9 @@ export async function syncPosts(args: {
   x: Scraper;
   synchronizers: TaggedSynchronizer[];
   onLog?: SyncLogCallback;
+  transformRules?: TransformRulesConfig | null;
 }) {
-  const { db, handle, x, synchronizers, onLog } = args;
+  const { db, handle, x, synchronizers, onLog, transformRules } = args;
   if (!synchronizers.filter((s) => s.syncPost).length) {
     return;
   }
@@ -93,6 +98,36 @@ export async function syncPosts(args: {
             prefixText: oraPrefixer(`${s.emoji} ${s.displayName}`),
           });
           try {
+            // Apply per-platform text transforms
+            let tweetForPlatform = metaTweet;
+            if (transformRules) {
+              const transformed = applyTransformRules(
+                metaTweet.text,
+                transformRules,
+                s.platformId,
+              );
+              if (transformed !== metaTweet.text) {
+                tweetForPlatform = {
+                  ...metaTweet,
+                  text: transformed,
+                  chunk: async (chunkArgs) => {
+                    const entries = extractWordsAndSpacers(
+                      transformed,
+                      tweet.urls ?? [],
+                    );
+                    return buildChunksFromSplitterEntries({
+                      entries,
+                      quotedStatusId: tweet.quotedStatusId,
+                      maxChunkSize: chunkArgs.maxChunkSize,
+                      quotedStatusLinkSection:
+                        chunkArgs.quotedStatusLinkSection ?? "",
+                      appendQuoteLink: chunkArgs.appendQuoteLink,
+                    });
+                  },
+                };
+              }
+            }
+
             platformLog.text = `| syncing ${s.emoji} ${s.displayName}...`;
             const store = await getPostStore({
               db,
@@ -101,7 +136,12 @@ export async function syncPosts(args: {
               s: s.storeSchema,
             });
             const syncRes = await withRetry(
-              () => s.syncPost!({ log: platformLog, tweet: metaTweet, store }),
+              () =>
+                s.syncPost!({
+                  log: platformLog,
+                  tweet: tweetForPlatform,
+                  store,
+                }),
               {
                 maxRetries: 3,
                 onRetry: (attempt, error) => {

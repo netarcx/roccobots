@@ -36,6 +36,7 @@ export const BotConfigs = sqliteTable("bot_configs", {
   backdateBlueskyPosts: integer("backdate_bluesky_posts", { mode: "boolean" })
     .notNull()
     .default(true),
+  transformRules: text("transform_rules"), // JSON TransformRulesConfig
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .$defaultFn(() => new Date()),

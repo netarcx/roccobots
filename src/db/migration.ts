@@ -86,6 +86,13 @@ export async function migrate(
     updated_at integer NOT NULL
   )`);
 
+  // Add transform_rules column to bot_configs (added after initial v2 deployment)
+  try {
+    db.run("ALTER TABLE bot_configs ADD COLUMN transform_rules TEXT");
+  } catch (_) {
+    // Column already exists
+  }
+
   // Ensure command_configs table exists
   db.run(`CREATE TABLE IF NOT EXISTS command_configs (
     bot_config_id integer PRIMARY KEY REFERENCES bot_configs(id) ON DELETE CASCADE,

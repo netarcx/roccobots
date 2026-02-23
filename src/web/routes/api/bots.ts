@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { TransformRulesConfigSchema } from "sync/transforms/transform-types";
 import { z } from "zod";
 
 import { requireAuth } from "../../middleware/auth";
@@ -264,6 +265,51 @@ botsRouter.get("/:id/logs", async (c) => {
     const logs = await configService.getSyncLogs(id, limit, offset);
     return c.json({ logs });
   } catch (error) {
+    return c.json({ error: (error as Error).message }, 400);
+  }
+});
+
+/**
+ * GET /api/bots/:id/transforms
+ * Get transform rules for a bot
+ */
+botsRouter.get("/:id/transforms", async (c) => {
+  const configService = c.get("configService");
+  const id = parseInt(c.req.param("id"));
+
+  if (isNaN(id)) {
+    return c.json({ error: "Invalid bot ID" }, 400);
+  }
+
+  try {
+    const rules = await configService.getTransformRules(id);
+    return c.json({ rules: rules ?? { global: [], platforms: {} } });
+  } catch (error) {
+    return c.json({ error: (error as Error).message }, 400);
+  }
+});
+
+/**
+ * PUT /api/bots/:id/transforms
+ * Update transform rules for a bot
+ */
+botsRouter.put("/:id/transforms", async (c) => {
+  const configService = c.get("configService");
+  const id = parseInt(c.req.param("id"));
+
+  if (isNaN(id)) {
+    return c.json({ error: "Invalid bot ID" }, 400);
+  }
+
+  try {
+    const body = await c.req.json();
+    const rules = TransformRulesConfigSchema.parse(body);
+    await configService.setTransformRules(id, rules);
+    return c.json({ rules });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return c.json({ error: "Validation error", details: error.errors }, 400);
+    }
     return c.json({ error: (error as Error).message }, 400);
   }
 });

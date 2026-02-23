@@ -1,11 +1,12 @@
 import { Scraper as XClient } from "@the-convocation/twitter-scraper";
 import { DBType, Schema } from "db";
-import { eq, lt } from "drizzle-orm";
+import { and, count, countDistinct, desc, eq, lt } from "drizzle-orm";
 import { LOG_RETENTION_DAYS } from "env";
 import { EventEmitter } from "events";
 import { BotConfig, BotInstance, BotInstanceStatus } from "sync/bot-instance";
 import { CommandPoller } from "sync/commands/command-poller";
 import { CommandExecutor, SettingKey } from "sync/commands/command-types";
+import { TransformRulesConfigSchema } from "sync/transforms/transform-types";
 import { createTwitterClient } from "sync/x-client";
 import { sendNotification } from "utils/notifications";
 
@@ -103,6 +104,18 @@ export class BotManager extends EventEmitter {
       .where(eq(Schema.PlatformConfigs.botConfigId, botId))
       .all();
 
+    // Parse transform rules JSON
+    let transformRules = null;
+    if (botConfig.transformRules) {
+      try {
+        transformRules = TransformRulesConfigSchema.parse(
+          JSON.parse(botConfig.transformRules),
+        );
+      } catch (_) {
+        // Use null on parse failure
+      }
+    }
+
     return {
       id: Number(botConfig.id),
       twitterHandle: botConfig.twitterHandle,
@@ -113,6 +126,7 @@ export class BotManager extends EventEmitter {
       syncProfileName: botConfig.syncProfileName,
       syncProfileHeader: botConfig.syncProfileHeader,
       backdateBlueskyPosts: botConfig.backdateBlueskyPosts,
+      transformRules,
       platforms: platforms.map((p) => ({
         platformId: p.platformId,
         enabled: p.enabled,
@@ -290,6 +304,128 @@ export class BotManager extends EventEmitter {
           await this.configService.updateBotConfig(id, {
             [field]: value,
           });
+        },
+        mute: async (id: number) => {
+          const bot = this.bots.get(id);
+          if (bot) bot.mute();
+        },
+        unmute: async (id: number) => {
+          const bot = this.bots.get(id);
+          if (bot) bot.unmute();
+        },
+        getLastPost: async (id: number) => {
+          // Find the most recent success log with a tweetId for bluesky
+          const log = await this.db
+            .select()
+            .from(Schema.SyncLogs)
+            .where(
+              and(
+                eq(Schema.SyncLogs.botConfigId, id),
+                eq(Schema.SyncLogs.level, "success"),
+                eq(Schema.SyncLogs.platform, "bluesky"),
+              ),
+            )
+            .orderBy(desc(Schema.SyncLogs.timestamp))
+            .limit(20)
+            .all();
+
+          // Find first log with a tweetId
+          const withTweet = log.find((l) => l.tweetId);
+          if (!withTweet?.tweetId) return null;
+
+          // Look up TweetMap for the bluesky rkey
+          const mapEntry = await this.db
+            .select()
+            .from(Schema.TweetMap)
+            .where(
+              and(
+                eq(Schema.TweetMap.tweetId, withTweet.tweetId),
+                eq(Schema.TweetMap.platform, "bluesky"),
+              ),
+            )
+            .get();
+
+          if (!mapEntry?.platformStore) return null;
+
+          try {
+            const store = JSON.parse(mapEntry.platformStore);
+            const rkey = store.rkey;
+            const uri = store.uri;
+            const cid = store.cid;
+            if (!rkey) return null;
+
+            // Get the bot's bluesky handle to construct URL
+            const botConfig = await this.configService.getBotConfigById(id);
+            const bskyPlatform = botConfig.platforms.find(
+              (p) => p.platformId === "bluesky",
+            );
+            const handle =
+              bskyPlatform?.credentials["BLUESKY_IDENTIFIER"] ?? "";
+
+            return {
+              url: `https://bsky.app/profile/${handle}/post/${rkey}`,
+              uri: uri ?? "",
+              cid: cid ?? "",
+            };
+          } catch (_) {
+            return null;
+          }
+        },
+        getStats: async (id: number) => {
+          const bot = this.bots.get(id);
+          const status = bot?.getStatus();
+
+          // Count logs by level
+          const successCount = await this.db
+            .select({ value: count() })
+            .from(Schema.SyncLogs)
+            .where(
+              and(
+                eq(Schema.SyncLogs.botConfigId, id),
+                eq(Schema.SyncLogs.level, "success"),
+              ),
+            )
+            .get();
+
+          const errorCount = await this.db
+            .select({ value: count() })
+            .from(Schema.SyncLogs)
+            .where(
+              and(
+                eq(Schema.SyncLogs.botConfigId, id),
+                eq(Schema.SyncLogs.level, "error"),
+              ),
+            )
+            .get();
+
+          // Count distinct synced tweets
+          const tweetCount = await this.db
+            .select({ value: countDistinct(Schema.SyncLogs.tweetId) })
+            .from(Schema.SyncLogs)
+            .where(
+              and(
+                eq(Schema.SyncLogs.botConfigId, id),
+                eq(Schema.SyncLogs.level, "success"),
+              ),
+            )
+            .get();
+
+          const isMuted = bot?.muted ?? false;
+          const lastSync = status?.lastSyncAt
+            ? status.lastSyncAt.toISOString()
+            : "never";
+          const nextSync = status?.nextSyncAt
+            ? status.nextSyncAt.toISOString()
+            : "n/a";
+
+          return [
+            `Muted: ${isMuted ? "yes" : "no"}`,
+            `Synced tweets: ${tweetCount?.value ?? 0}`,
+            `Success logs: ${successCount?.value ?? 0}`,
+            `Error logs: ${errorCount?.value ?? 0}`,
+            `Last sync: ${lastSync}`,
+            `Next sync: ${nextSync}`,
+          ].join("\n");
         },
       };
 

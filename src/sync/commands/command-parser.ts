@@ -39,6 +39,36 @@ export function parseCommand(text: string): ParsedCommand | null {
     };
   }
 
+  // Match !pin
+  if (/(?:^|\s)!pin\b/i.test(normalized)) {
+    return { type: "pin", args: [], raw: normalized };
+  }
+
+  // Match !unpin
+  if (/(?:^|\s)!unpin\b/i.test(normalized)) {
+    return { type: "unpin", args: [], raw: normalized };
+  }
+
+  // Match !mute
+  if (/(?:^|\s)!mute\b/i.test(normalized)) {
+    return { type: "mute", args: [], raw: normalized };
+  }
+
+  // Match !unmute
+  if (/(?:^|\s)!unmute\b/i.test(normalized)) {
+    return { type: "unmute", args: [], raw: normalized };
+  }
+
+  // Match !last
+  if (/(?:^|\s)!last\b/i.test(normalized)) {
+    return { type: "last", args: [], raw: normalized };
+  }
+
+  // Match !stats
+  if (/(?:^|\s)!stats\b/i.test(normalized)) {
+    return { type: "stats", args: [], raw: normalized };
+  }
+
   // Match !help
   if (/(?:^|\s)!help\b/i.test(normalized)) {
     return { type: "help", args: [], raw: normalized };

@@ -273,6 +273,78 @@ export class CommandPoller extends EventEmitter {
           break;
         }
 
+        case "pin": {
+          // If the mention is a reply, pin the parent post; otherwise pin last synced post
+          const pinRecord = notification.record as Record<string, unknown>;
+          const pinReply = pinRecord?.reply as
+            | {
+                parent?: { uri: string; cid: string };
+              }
+            | undefined;
+
+          if (pinReply?.parent) {
+            // Pin the post being replied to
+            await this.agent!.upsertProfile((existing) => ({
+              ...existing,
+              pinnedPost: pinReply.parent,
+            }));
+          } else {
+            // Pin the last synced post via executor
+            const lastPost = await this.executor.getLastPost(this.botId);
+            if (!lastPost) {
+              await this.reply(notification, "No synced posts found to pin.");
+              break;
+            }
+            await this.agent!.upsertProfile((existing) => ({
+              ...existing,
+              pinnedPost: { uri: lastPost.uri, cid: lastPost.cid },
+            }));
+          }
+          await this.reply(notification, responses.pin);
+          break;
+        }
+
+        case "unpin": {
+          await this.agent!.upsertProfile((existing) => ({
+            ...existing,
+            pinnedPost: undefined,
+          }));
+          await this.reply(notification, responses.unpin);
+          break;
+        }
+
+        case "mute":
+          await this.executor.mute(this.botId);
+          await this.reply(notification, responses.mute);
+          break;
+
+        case "unmute":
+          await this.executor.unmute(this.botId);
+          await this.reply(notification, responses.unmute);
+          break;
+
+        case "last": {
+          const last = await this.executor.getLastPost(this.botId);
+          if (!last) {
+            await this.reply(notification, "No synced posts found.");
+            break;
+          }
+          await this.reply(
+            notification,
+            responses.last.replace("{url}", last.url),
+          );
+          break;
+        }
+
+        case "stats": {
+          const statsText = await this.executor.getStats(this.botId);
+          await this.reply(
+            notification,
+            responses.stats.replace("{stats}", statsText),
+          );
+          break;
+        }
+
         case "posts":
         case "bio":
         case "avatar":
