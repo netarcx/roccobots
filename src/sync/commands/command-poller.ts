@@ -100,14 +100,16 @@ export class CommandPoller extends EventEmitter {
       const res = await this.agent.listNotifications({ limit: 50 });
       const notifications = res.data.notifications;
 
+      const allMentions = notifications.filter((n) => n.reason === "mention");
+
       // Filter to mentions newer than lastSeenAt
-      const mentions = notifications
-        .filter((n) => n.reason === "mention")
-        .filter((n) => {
-          if (!this.lastSeenAt) return true;
-          return n.indexedAt > this.lastSeenAt;
-        })
-        // Filter out self-mentions
+      const newMentions = allMentions.filter((n) => {
+        if (!this.lastSeenAt) return true;
+        return n.indexedAt > this.lastSeenAt;
+      });
+
+      // Filter out self-mentions
+      const mentions = newMentions
         .filter(
           (n) =>
             n.author.handle !== this.credentials.identifier &&
@@ -115,6 +117,24 @@ export class CommandPoller extends EventEmitter {
         )
         // Process oldest first
         .sort((a, b) => a.indexedAt.localeCompare(b.indexedAt));
+
+      if (allMentions.length > 0) {
+        this.emitLog(
+          "info",
+          `Poll: ${notifications.length} notifications, ${allMentions.length} mentions, ${newMentions.length} new, ${mentions.length} actionable (lastSeenAt: ${this.lastSeenAt ?? "none"})`,
+        );
+        // Log the text of each mention for debugging
+        for (const m of allMentions) {
+          const text = String(
+            (m.record as Record<string, unknown>)?.text ?? "",
+          );
+          const isNew = !this.lastSeenAt || m.indexedAt > this.lastSeenAt;
+          this.emitLog(
+            "info",
+            `  mention from @${m.author.handle} [${m.indexedAt}]${isNew ? "" : " (skipped: before lastSeenAt)"}: ${text.substring(0, 100)}`,
+          );
+        }
+      }
 
       for (const mention of mentions) {
         await this.processMention(mention);
