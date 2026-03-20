@@ -27,12 +27,6 @@ export async function createTwitterClient({
       xpff: true,
     },
     fetch: cycleTLSFetch,
-    rateLimitStrategy: {
-      async onRateLimit(e) {
-        // console.log(e)
-        throw new Error("Rate limited");
-      },
-    },
   });
   if (!twitterPassword || !twitterUsername) {
     log.warn("connected as guest | replies will not be synced");
