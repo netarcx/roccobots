@@ -23,7 +23,7 @@ export async function createTwitterClient({
 
   const client = new Scraper({
     experimental: {
-      xClientTransactionId: true,
+      xClientTransactionId: false,
       xpff: true,
     },
     fetch: cycleTLSFetch,
