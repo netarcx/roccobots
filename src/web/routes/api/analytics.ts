@@ -1,6 +1,6 @@
 import AtpAgent, { CredentialSession } from "@atproto/api";
 import { Schema } from "db";
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { Hono } from "hono";
 
 import { requireAuth } from "../../middleware/auth";
@@ -16,13 +16,64 @@ const analyticsRouter = new Hono<{
 
 analyticsRouter.use("*", requireAuth);
 
+function rangeToDate(range: string | undefined): Date | null {
+  const now = Date.now();
+  if (range === "day") return new Date(now - 86400 * 1000);
+  if (range === "week") return new Date(now - 7 * 86400 * 1000);
+  if (range === "month") return new Date(now - 30 * 86400 * 1000);
+  return null;
+}
+
 /**
- * GET /api/analytics/:botId
+ * GET /api/analytics/combined?range=day|week|month|all
+ * Returns aggregated Bluesky metrics across all bots
+ */
+analyticsRouter.get("/combined", async (c) => {
+  const range = c.req.query("range");
+  const after = rangeToDate(range);
+
+  const configService = c.get("configService");
+  const db = configService.getDb();
+
+  const conditions = [sql`1=1`];
+  if (after) {
+    conditions.push(gte(Schema.TweetMetrics.recordedAt, after));
+  }
+
+  const metrics = db
+    .select()
+    .from(Schema.TweetMetrics)
+    .where(and(...conditions))
+    .orderBy(
+      desc(
+        sql`${Schema.TweetMetrics.blueskyLikes} + ${Schema.TweetMetrics.blueskyReposts} + ${Schema.TweetMetrics.blueskyReplies} + ${Schema.TweetMetrics.blueskyQuotes}`,
+      ),
+    )
+    .all();
+
+  const totals = metrics.reduce(
+    (acc, m) => ({
+      likes: acc.likes + m.blueskyLikes,
+      reposts: acc.reposts + m.blueskyReposts,
+      replies: acc.replies + m.blueskyReplies,
+      quotes: acc.quotes + m.blueskyQuotes,
+    }),
+    { likes: 0, reposts: 0, replies: 0, quotes: 0 },
+  );
+
+  return c.json({ metrics, totals, count: metrics.length });
+});
+
+/**
+ * GET /api/analytics/:botId?range=day|week|month|all
  * Returns stored Bluesky metrics for a bot, sorted by total engagement
  */
 analyticsRouter.get("/:botId", async (c) => {
   const botId = parseInt(c.req.param("botId"));
   if (isNaN(botId)) return c.json({ error: "Invalid bot ID" }, 400);
+
+  const range = c.req.query("range");
+  const after = rangeToDate(range);
 
   const configService = c.get("configService");
   const db = configService.getDb();
@@ -35,10 +86,15 @@ analyticsRouter.get("/:botId", async (c) => {
     return c.json({ error: "Bot not found" }, 404);
   }
 
+  const conditions = [eq(Schema.TweetMetrics.botConfigId, botId)];
+  if (after) {
+    conditions.push(gte(Schema.TweetMetrics.recordedAt, after));
+  }
+
   const metrics = db
     .select()
     .from(Schema.TweetMetrics)
-    .where(eq(Schema.TweetMetrics.botConfigId, botId))
+    .where(and(...conditions))
     .orderBy(
       desc(
         sql`${Schema.TweetMetrics.blueskyLikes} + ${Schema.TweetMetrics.blueskyReposts} + ${Schema.TweetMetrics.blueskyReplies} + ${Schema.TweetMetrics.blueskyQuotes}`,
@@ -95,9 +151,12 @@ analyticsRouter.post("/:botId/refresh", async (c) => {
   }
 
   const instance = BLUESKY_INSTANCE || "bsky.social";
+  // Strip protocol prefix if present (e.g. "https://bsky.social" → "bsky.social")
+  const instanceHost = instance.replace(/^https?:\/\//, "");
 
+  let did: string;
   try {
-    const session = new CredentialSession(new URL(`https://${instance}`));
+    const session = new CredentialSession(new URL(`https://${instanceHost}`));
     const agent = new AtpAgent(session);
     await agent.login({
       identifier: BLUESKY_IDENTIFIER,
@@ -105,7 +164,7 @@ analyticsRouter.post("/:botId/refresh", async (c) => {
     });
 
     const profileRes = await agent.getProfile({ actor: BLUESKY_IDENTIFIER });
-    const did = profileRes.data.did;
+    did = profileRes.data.did;
 
     // Fetch all bluesky TweetMap entries
     const tweetMaps = db
@@ -114,16 +173,27 @@ analyticsRouter.post("/:botId/refresh", async (c) => {
       .where(eq(Schema.TweetMap.platform, "bluesky"))
       .all();
 
-    // Build URI -> tweetId map
+    // Build URI -> tweetId map.
+    // Prefer the stored AT URI (which is always correct); only include entries
+    // whose URI belongs to this bot's DID so multi-bot setups stay accurate.
     const uriToTweetId = new Map<string, string>();
     for (const entry of tweetMaps) {
       try {
         const store = JSON.parse(entry.platformStore) as {
           rkey?: string;
           cid?: string;
+          uri?: string;
         };
-        if (store?.rkey) {
-          const uri = `at://${did}/app.bsky.feed.post/${store.rkey}`;
+        const storedUri = store?.uri;
+        let uri: string | null = null;
+        if (storedUri && storedUri.startsWith(`at://${did}/`)) {
+          // Use the precise URI that was stored at sync time
+          uri = storedUri;
+        } else if (store?.rkey) {
+          // Fallback: construct URI from did + rkey
+          uri = `at://${did}/app.bsky.feed.post/${store.rkey}`;
+        }
+        if (uri) {
           uriToTweetId.set(uri, entry.tweetId);
         }
       } catch {
@@ -142,9 +212,10 @@ analyticsRouter.post("/:botId/refresh", async (c) => {
 
     for (let i = 0; i < uris.length; i += BATCH_SIZE) {
       const batch = uris.slice(i, i + BATCH_SIZE);
-      const result = await agent.api.app.bsky.feed.getPosts({ uris: batch });
+      const result = await agent.app.bsky.feed.getPosts({ uris: batch });
+      const posts = result.data?.posts ?? [];
 
-      for (const post of result.data.posts) {
+      for (const post of posts) {
         const tweetId = uriToTweetId.get(post.uri);
         if (!tweetId) continue;
 
@@ -179,10 +250,8 @@ analyticsRouter.post("/:botId/refresh", async (c) => {
 
     return c.json({ success: true, refreshed });
   } catch (error) {
-    return c.json(
-      { error: `Refresh failed: ${(error as Error).message}` },
-      500,
-    );
+    const message = error instanceof Error ? error.message : String(error);
+    return c.json({ error: `Refresh failed: ${message}` }, 500);
   }
 });
 

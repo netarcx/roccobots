@@ -5,13 +5,27 @@ export function analyticsPage(): string {
     title: "Analytics",
     authenticated: true,
     content: `
-    <!-- Bot Selector -->
+    <!-- Header row: title + bot selector + range selector + refresh -->
     <div class="flex flex-wrap items-center gap-3 mb-6">
       <h1 class="text-xl font-bold text-slate-100">Bluesky Analytics</h1>
       <div class="flex-1"></div>
+
+      <!-- Date range selector -->
+      <div class="flex rounded overflow-hidden border border-slate-700 text-sm">
+        <button onclick="setRange('day')" data-range="day"
+          class="range-btn px-3 py-1.5 bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors">Day</button>
+        <button onclick="setRange('week')" data-range="week"
+          class="range-btn px-3 py-1.5 bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors border-l border-slate-700">Week</button>
+        <button onclick="setRange('month')" data-range="month"
+          class="range-btn px-3 py-1.5 bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors border-l border-slate-700">Month</button>
+        <button onclick="setRange('all')" data-range="all"
+          class="range-btn px-3 py-1.5 bg-blue-600 text-white transition-colors border-l border-slate-700">All Time</button>
+      </div>
+
       <select id="bot-select" onchange="selectBot(this.value)"
         class="bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded px-3 py-1.5 focus:outline-none focus:border-blue-500">
         <option value="">Select a bot...</option>
+        <option value="combined">&#10024; All Bots</option>
       </select>
       <button id="refresh-btn" onclick="refreshMetrics()" disabled
         class="bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-1.5 rounded transition-colors">
@@ -49,13 +63,13 @@ export function analyticsPage(): string {
     <!-- Empty state -->
     <div id="empty-state" class="hidden text-center py-16 text-slate-400">
       <div class="text-4xl mb-3">No data yet</div>
-      <p class="text-sm mb-4">Click "Refresh from Bluesky" to fetch engagement stats for synced posts.</p>
+      <p class="text-sm mb-4" id="empty-msg">Click "Refresh from Bluesky" to fetch engagement stats for synced posts.</p>
     </div>
 
     <!-- No bot selected -->
     <div id="no-bot-state" class="text-center py-16 text-slate-400">
       <div class="text-4xl mb-3">Select a bot</div>
-      <p class="text-sm">Choose a bot from the dropdown above to view its Bluesky analytics.</p>
+      <p class="text-sm">Choose a bot (or "All Bots") from the dropdown above to view analytics.</p>
     </div>
 
     <!-- Metrics Table -->
@@ -79,6 +93,7 @@ export function analyticsPage(): string {
     scripts: `
     <script>
       let selectedBotId = null;
+      let currentRange = 'all';
 
       function esc(str) {
         const d = document.createElement('div');
@@ -95,6 +110,18 @@ export function analyticsPage(): string {
         const hrs = Math.floor(mins / 60);
         if (hrs < 24) return hrs + 'h ago';
         return Math.floor(hrs / 24) + 'd ago';
+      }
+
+      function setRange(range) {
+        currentRange = range;
+        document.querySelectorAll('.range-btn').forEach(btn => {
+          const active = btn.dataset.range === range;
+          btn.classList.toggle('bg-blue-600', active);
+          btn.classList.toggle('text-white', active);
+          btn.classList.toggle('bg-slate-800', !active);
+          btn.classList.toggle('text-slate-300', !active);
+        });
+        if (selectedBotId) loadMetrics();
       }
 
       async function loadBots() {
@@ -116,7 +143,8 @@ export function analyticsPage(): string {
       async function selectBot(botId) {
         selectedBotId = botId || null;
         const refreshBtn = document.getElementById('refresh-btn');
-        refreshBtn.disabled = !selectedBotId;
+        // Refresh is only available for individual bots (not combined view)
+        refreshBtn.disabled = !selectedBotId || selectedBotId === 'combined';
 
         if (!selectedBotId) {
           showState('no-bot');
@@ -124,15 +152,24 @@ export function analyticsPage(): string {
         }
 
         // Update the settings link for the disabled state
-        document.getElementById('disabled-settings-link').href = '/bots/' + selectedBotId;
+        if (selectedBotId !== 'combined') {
+          document.getElementById('disabled-settings-link').href = '/bots/' + selectedBotId;
+        }
 
         await loadMetrics();
       }
 
       async function loadMetrics() {
         if (!selectedBotId) return;
+        const rangeParam = currentRange !== 'all' ? '?range=' + currentRange : '';
         try {
-          const res = await fetch('/api/analytics/' + selectedBotId);
+          let url;
+          if (selectedBotId === 'combined') {
+            url = '/api/analytics/combined' + rangeParam;
+          } else {
+            url = '/api/analytics/' + selectedBotId + rangeParam;
+          }
+          const res = await fetch(url);
           const data = await res.json();
           if (data.error) { showToast(data.error, 'error'); return; }
           renderMetrics(data);
@@ -144,13 +181,15 @@ export function analyticsPage(): string {
       function renderMetrics(data) {
         const { metrics, totals, count, analyticsEnabled } = data;
 
-        if (!analyticsEnabled) {
+        if (analyticsEnabled === false) {
           document.getElementById('refresh-btn').disabled = true;
           showState('disabled');
           return;
         }
 
-        document.getElementById('refresh-btn').disabled = false;
+        if (selectedBotId !== 'combined') {
+          document.getElementById('refresh-btn').disabled = false;
+        }
 
         // Summary cards
         document.getElementById('stat-likes').textContent = totals.likes.toLocaleString();
@@ -159,6 +198,11 @@ export function analyticsPage(): string {
         document.getElementById('stat-count').textContent = count.toLocaleString();
 
         if (count === 0) {
+          const rangeLabel = { day: 'past 24 hours', week: 'past week', month: 'past month', all: '' }[currentRange] || '';
+          document.getElementById('empty-msg').textContent =
+            selectedBotId === 'combined'
+              ? (rangeLabel ? 'No analytics data for the ' + rangeLabel + '.' : 'No analytics data yet. Refresh a bot to populate.')
+              : (rangeLabel ? 'No data for the ' + rangeLabel + '. Try "All Time" or click Refresh.' : 'Click "Refresh from Bluesky" to fetch engagement stats.');
           showState('empty');
           return;
         }
@@ -207,7 +251,7 @@ export function analyticsPage(): string {
       }
 
       async function refreshMetrics() {
-        if (!selectedBotId) return;
+        if (!selectedBotId || selectedBotId === 'combined') return;
         const btn = document.getElementById('refresh-btn');
         btn.disabled = true;
         btn.textContent = 'Refreshing...';
