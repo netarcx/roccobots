@@ -41,6 +41,19 @@ export interface MetaPost extends ValidPost {
 }
 
 export const formatTweetText = (tweet: Tweet): string => {
+  // For retweets, tweet.text is truncated at ~140 chars by the Twitter API.
+  // Use the full text from retweetedStatus to avoid cut-off content.
+  if (tweet.isRetweet && tweet.retweetedStatus) {
+    const rt = tweet.retweetedStatus;
+    let rtText = rt.text ?? "";
+    (rt.urls ?? []).forEach((url) => {
+      rtText = rtText.replace(/https:\/\/t\.co\/\w+/, url);
+    });
+    rtText = rtText.replaceAll(/https:\/\/t\.co\/\w+/g, "");
+    rtText = decode(rtText).trim();
+    return `RT @${rt.username}: ${rtText}`;
+  }
+
   let text = tweet.text ?? "";
   // Replace urls
   tweet.urls.forEach((url) => {
@@ -77,7 +90,11 @@ export const toMetaPost = (tweet: ValidPost): MetaPost => {
     language: eldr.detect(text).languageName,
     sensitiveContent: tweet.sensitiveContent ?? false,
     chunk: async (args: SplitTextArgs) => {
-      const entries = extractWordsAndSpacers(text, tweet.urls ?? []);
+      const chunkUrls =
+        tweet.isRetweet && tweet.retweetedStatus
+          ? tweet.retweetedStatus.urls ?? []
+          : tweet.urls ?? [];
+      const entries = extractWordsAndSpacers(text, chunkUrls);
       return buildChunksFromSplitterEntries({
         entries,
         quotedStatusId: tweet.quotedStatusId,
