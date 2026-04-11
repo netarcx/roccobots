@@ -4,6 +4,7 @@ import { serveStatic } from "hono/bun";
 
 import { requireAuth, sessionMiddleware } from "./middleware/auth";
 import { errorHandler } from "./middleware/error";
+import analyticsRouter from "./routes/api/analytics";
 import authRouter from "./routes/api/auth";
 import botsRouter from "./routes/api/bots";
 import commandsRouter from "./routes/api/commands";
@@ -12,6 +13,7 @@ import systemRouter from "./routes/api/system";
 import { BotManager } from "./services/bot-manager";
 import { importFromEnv } from "./services/config-migration";
 import { ConfigService } from "./services/config-service";
+import { analyticsPage } from "./views/analytics";
 import { botFormPage } from "./views/bot-form";
 import { dashboardPage } from "./views/dashboard";
 import { loginPage } from "./views/login";
@@ -51,6 +53,7 @@ export function createServer(options: ServerOptions) {
 
   // API routes
   app.route("/api/auth", authRouter);
+  app.route("/api/analytics", analyticsRouter);
   app.route("/api/bots", botsRouter);
   app.route("/api/bots", commandsRouter);
   app.route("/api/system", systemRouter);
@@ -104,6 +107,10 @@ export function createServer(options: ServerOptions) {
     } catch (_error) {
       return c.redirect("/");
     }
+  });
+
+  app.get("/analytics", requireAuth, async (_c) => {
+    return _c.html(analyticsPage());
   });
 
   app.get("/settings", requireAuth, async (_c) => {

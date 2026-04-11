@@ -36,6 +36,9 @@ export const BotConfigs = sqliteTable("bot_configs", {
   backdateBlueskyPosts: integer("backdate_bluesky_posts", { mode: "boolean" })
     .notNull()
     .default(true),
+  analyticsEnabled: integer("analytics_enabled", { mode: "boolean" })
+    .notNull()
+    .default(true),
   transformRules: text("transform_rules"), // JSON TransformRulesConfig
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
@@ -135,6 +138,27 @@ export const CommandConfigs = sqliteTable("command_configs", {
     .notNull()
     .$defaultFn(() => new Date()),
 });
+
+/**
+ * Tweet metrics - Bluesky engagement stats for synced posts
+ */
+export const TweetMetrics = sqliteTable(
+  "tweet_metrics",
+  {
+    tweetId: text("tweet_id").notNull(),
+    botConfigId: integer("bot_config_id")
+      .notNull()
+      .references(() => BotConfigs.id, { onDelete: "cascade" }),
+    blueskyLikes: integer("bluesky_likes").notNull().default(0),
+    blueskyReposts: integer("bluesky_reposts").notNull().default(0),
+    blueskyReplies: integer("bluesky_replies").notNull().default(0),
+    blueskyQuotes: integer("bluesky_quotes").notNull().default(0),
+    recordedAt: integer("recorded_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => [primaryKey({ columns: [t.tweetId, t.botConfigId] })],
+);
 
 /**
  * Web sessions - session storage for web interface authentication

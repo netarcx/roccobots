@@ -29,6 +29,7 @@ const createBotSchema = z.object({
   syncProfileName: z.boolean().optional(),
   syncProfileHeader: z.boolean().optional(),
   backdateBlueskyPosts: z.boolean().optional(),
+  analyticsEnabled: z.boolean().optional(),
 });
 
 const updateBotSchema = createBotSchema.partial();

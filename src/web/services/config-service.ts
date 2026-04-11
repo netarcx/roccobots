@@ -31,6 +31,7 @@ export interface CreateBotConfigInput {
   syncProfileName?: boolean;
   syncProfileHeader?: boolean;
   backdateBlueskyPosts?: boolean;
+  analyticsEnabled?: boolean;
 }
 
 export interface UpdateBotConfigInput {
@@ -43,6 +44,7 @@ export interface UpdateBotConfigInput {
   syncProfileName?: boolean;
   syncProfileHeader?: boolean;
   backdateBlueskyPosts?: boolean;
+  analyticsEnabled?: boolean;
 }
 
 export interface BotConfigOutput {
@@ -56,6 +58,7 @@ export interface BotConfigOutput {
   syncProfileName: boolean;
   syncProfileHeader: boolean;
   backdateBlueskyPosts: boolean;
+  analyticsEnabled: boolean;
   createdAt: Date;
   updatedAt: Date;
   platforms: PlatformConfigOutput[];
@@ -88,6 +91,10 @@ export interface PlatformConfigOutput {
 export class ConfigService {
   constructor(private db: DBType) {}
 
+  getDb(): DBType {
+    return this.db;
+  }
+
   /**
    * Create a new bot configuration
    */
@@ -107,6 +114,7 @@ export class ConfigService {
         syncProfileName: input.syncProfileName ?? true,
         syncProfileHeader: input.syncProfileHeader ?? true,
         backdateBlueskyPosts: input.backdateBlueskyPosts ?? true,
+        analyticsEnabled: input.analyticsEnabled ?? true,
       })
       .returning()
       .get();
@@ -143,6 +151,7 @@ export class ConfigService {
       syncProfileName: botConfig.syncProfileName,
       syncProfileHeader: botConfig.syncProfileHeader,
       backdateBlueskyPosts: botConfig.backdateBlueskyPosts,
+      analyticsEnabled: botConfig.analyticsEnabled,
       createdAt: new Date(Number(botConfig.createdAt)),
       updatedAt: new Date(Number(botConfig.updatedAt)),
       platforms,

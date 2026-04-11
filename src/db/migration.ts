@@ -130,5 +130,26 @@ export async function migrate(
     // Table may not exist yet if migration just created it — that's fine
   }
 
+  // Add analytics_enabled column to bot_configs (opt-out of analytics per bot)
+  try {
+    db.run(
+      "ALTER TABLE bot_configs ADD COLUMN analytics_enabled INTEGER NOT NULL DEFAULT 1",
+    );
+  } catch (_) {
+    // Column already exists
+  }
+
+  // Ensure tweet_metrics table exists (Bluesky engagement analytics)
+  db.run(`CREATE TABLE IF NOT EXISTS tweet_metrics (
+    tweet_id text NOT NULL,
+    bot_config_id integer NOT NULL REFERENCES bot_configs(id) ON DELETE CASCADE,
+    bluesky_likes integer NOT NULL DEFAULT 0,
+    bluesky_reposts integer NOT NULL DEFAULT 0,
+    bluesky_replies integer NOT NULL DEFAULT 0,
+    bluesky_quotes integer NOT NULL DEFAULT 0,
+    recorded_at integer NOT NULL,
+    PRIMARY KEY (tweet_id, bot_config_id)
+  )`);
+
   return db as DBType;
 }

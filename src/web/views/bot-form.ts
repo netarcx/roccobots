@@ -15,6 +15,7 @@ interface BotData {
   syncProfileName?: boolean;
   syncProfileHeader?: boolean;
   backdateBlueskyPosts?: boolean;
+  analyticsEnabled?: boolean;
   enabled?: boolean;
   platforms?: {
     platformId: string;
@@ -104,6 +105,7 @@ export function botFormPage(bot?: BotData): string {
             ${checkbox("syncProfileName", "Sync Display Name", bot?.syncProfileName ?? true)}
             ${checkbox("syncProfileHeader", "Sync Header Image", bot?.syncProfileHeader ?? true)}
             ${checkbox("backdateBlueskyPosts", "Backdate Bluesky Posts", bot?.backdateBlueskyPosts ?? true)}
+            ${checkbox("analyticsEnabled", "Bluesky Analytics", bot?.analyticsEnabled ?? true)}
             ${checkbox("enabled", "Enabled", bot?.enabled ?? true)}
           </div>
         </div>
@@ -354,6 +356,7 @@ export function botFormPage(bot?: BotData): string {
             syncProfileName: document.getElementById('syncProfileName').checked,
             syncProfileHeader: document.getElementById('syncProfileHeader').checked,
             backdateBlueskyPosts: document.getElementById('backdateBlueskyPosts').checked,
+            analyticsEnabled: document.getElementById('analyticsEnabled').checked,
             enabled: document.getElementById('enabled').checked,
           };
 
