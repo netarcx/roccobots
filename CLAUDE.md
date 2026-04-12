@@ -62,6 +62,21 @@ Each synchronizer can implement: `syncBio`, `syncUserName`, `syncProfilePic`, `s
 
 SQLite via Drizzle ORM. The v1 schema stores synced post metadata (avoiding duplicates). The v2 schema (web mode) adds: `bot_configs`, `platform_configs` (encrypted JSON credentials), `sync_logs`, `bot_status`, `web_sessions`.
 
+Post-v2 additions (applied via in-code `ALTER TABLE` / `CREATE TABLE IF NOT EXISTS` in `src/db/migration.ts`, not via drizzle-kit):
+- `twitter_auth` — single-row global Twitter credentials shared by all bots
+- `command_configs` — per-bot Bluesky command handler settings
+- `tweet_metrics` — Bluesky engagement stats (likes, reposts, replies, quotes) per synced post
+- `bot_configs.analytics_enabled` — boolean column to enable/disable analytics per bot
+- `bot_configs.transform_rules` — JSON column for per-bot text transform rules
+
+**Migration pattern**: New tables and columns added after the initial v2 deployment use idempotent try/catch `ALTER TABLE` or `CREATE TABLE IF NOT EXISTS` statements at the bottom of `migrate()` in `src/db/migration.ts`. Do NOT use drizzle-kit for these incremental additions.
+
+### Web Dashboard Features
+
+- **Analytics** (`src/web/routes/api/analytics.ts`, `src/web/views/analytics.ts`): Tracks Bluesky engagement (likes/reposts/replies/quotes) per synced post. `GET /api/analytics/:botId?range=day|week|month` filters by `recordedAt`. `GET /api/analytics/combined` aggregates across all bots. `POST /api/analytics/:botId/refresh` fetches live stats via `agent.app.bsky.feed.getPosts`.
+- **Text Transforms** (`src/sync/transforms/`): Per-bot rules (prepend, append, regex_replace, strip_urls, add_hashtags) applied before posting. Scoped to specific platforms or global.
+- **Bluesky Commands** (`src/sync/commands/`): Trusted Bluesky handles can control a bot via mentions (`!sync`, `!restart`, `!source`, `!status`, `!frequency`, `!posts`, `!bio`, `!help`). Polled at a configurable interval.
+
 ### TypeScript Path Aliases
 
 `tsconfig.json` sets `baseUrl: "./src"`, so imports use bare paths like `import { db } from "db"` rather than relative paths.
@@ -70,6 +85,6 @@ SQLite via Drizzle ORM. The v1 schema stores synced post metadata (avoiding dupl
 
 - Bun runtime, ESM modules (`"type": "module"`)
 - Strict TypeScript (`strict: true`, `noUnusedLocals`, `noUnusedParameters`)
-- Prettier: 4-space indentation, semicolons, double quotes
+- Prettier: 2-space indentation, semicolons, double quotes (no `.prettierrc` — this is the Prettier default)
 - ESLint: `simple-import-sort` plugin enforces import ordering; unused parameters must be prefixed with `_`
 - Conventional commits (commitlint configured)
