@@ -12,7 +12,12 @@ import AtpAgent, {
 } from "@atproto/api";
 import { Image as BlueskyImage } from "@atproto/api/dist/client/types/app/bsky/embed/images";
 import { Photo } from "@the-convocation/twitter-scraper";
-import { BACKDATE_BLUESKY_POSTS, DEBUG, VOID } from "env";
+import {
+  BACKDATE_BLUESKY_POSTS,
+  BLUESKY_VIDEO_MAX_SIZE_BYTES,
+  DEBUG,
+  VOID,
+} from "env";
 import {
   buildReplyEntry,
   getBlueskyChunkLinkMetadata,
@@ -175,17 +180,30 @@ export const BlueskySynchronizerFactory: SynchronizerFactory<
             log.warn(`Unable to upload all ${videos.length} videos`);
           }
           const [video] = videos;
-          try {
-            const blob = await parseBlobForBluesky(video.file!);
-            const uploadRes = await agent.uploadBlob(blob.blobData, {
-              encoding: blob.mimeType,
-            });
-            media = {
-              $type: "app.bsky.embed.video",
-              video: uploadRes.data.blob,
-            };
-          } catch (e) {
-            logError(log, e)`Error while uploading video to bluesky: ${e}`;
+          const videoSize = video.file!.size;
+          if (videoSize > BLUESKY_VIDEO_MAX_SIZE_BYTES) {
+            const sizeMB = (videoSize / 1024 / 1024).toFixed(1);
+            const limitMB = (
+              BLUESKY_VIDEO_MAX_SIZE_BYTES /
+              1024 /
+              1024
+            ).toFixed(0);
+            log.warn(
+              `Skipping video: ${sizeMB}MB exceeds Bluesky upload limit of ${limitMB}MB — posting text only`,
+            );
+          } else {
+            try {
+              const blob = await parseBlobForBluesky(video.file!);
+              const uploadRes = await agent.uploadBlob(blob.blobData, {
+                encoding: blob.mimeType,
+              });
+              media = {
+                $type: "app.bsky.embed.video",
+                video: uploadRes.data.blob,
+              };
+            } catch (e) {
+              logError(log, e)`Error while uploading video to bluesky: ${e}`;
+            }
           }
         } else if (photos.length) {
           const photoRes: [

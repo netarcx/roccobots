@@ -29,7 +29,9 @@ export const compressMedia = async (
   // console.log("compressing", inputBlob.type);
 
   if (inputBlob.type.startsWith("video/")) {
-    console.log("Unable to compress videos");
+    // Videos pass through uncompressed. Size limits are enforced by callers
+    // (see BLUESKY_VIDEO_MAX_SIZE_BYTES in env.ts).
+    if (DEBUG) console.log("Skipping video compression (passthrough)");
     return;
   }
 
