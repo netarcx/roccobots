@@ -24,6 +24,7 @@ import {
 } from "sync/platforms/bluesky/utils";
 import { parseBlobForBluesky } from "sync/platforms/bluesky/utils/parse-blob-for-bluesky";
 import { splitTextForBluesky } from "sync/platforms/bluesky/utils/split-text";
+import { uploadBlueskyVideo } from "sync/platforms/bluesky/utils/upload-bluesky-video";
 import { getPostStore, getPostStoreStr } from "utils/get-post-store";
 import { logError, oraProgress } from "utils/logs";
 import { getPostExcerpt } from "utils/post/get-post-excerpt";
@@ -193,13 +194,10 @@ export const BlueskySynchronizerFactory: SynchronizerFactory<
             );
           } else {
             try {
-              const blob = await parseBlobForBluesky(video.file!);
-              const uploadRes = await agent.uploadBlob(blob.blobData, {
-                encoding: blob.mimeType,
-              });
+              const blobRef = await uploadBlueskyVideo(agent, video.file!, log);
               media = {
                 $type: "app.bsky.embed.video",
-                video: uploadRes.data.blob,
+                video: blobRef,
               };
             } catch (e) {
               logError(log, e)`Error while uploading video to bluesky: ${e}`;

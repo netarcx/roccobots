@@ -79,11 +79,11 @@ export const TOUITOMAMOUT_VERSION = packageInfo.version ?? "0.0.0";
 export const MASTODON_MAX_POST_LENGTH = 500;
 export const BLUESKY_MAX_POST_LENGTH = 300;
 export const BLUESKY_MEDIA_MAX_SIZE_BYTES = 976560;
-// Bluesky's generic uploadBlob endpoint (routed through an Express PDS) rejects
-// payloads above ~50MB with 413 PayloadTooLarge. Videos over this are skipped
-// rather than failing the whole post. Configurable via BLUESKY_VIDEO_MAX_SIZE_MB.
+// Bluesky's dedicated video.bsky.app endpoint accepts up to ~100MB per video.
+// Anything larger is skipped (post goes through as text-only) rather than
+// burning time on a doomed upload. Configurable via BLUESKY_VIDEO_MAX_SIZE_MB.
 export const BLUESKY_VIDEO_MAX_SIZE_BYTES =
-  parseInt(process.env.BLUESKY_VIDEO_MAX_SIZE_MB ?? "50") * 1024 * 1024;
+  parseInt(process.env.BLUESKY_VIDEO_MAX_SIZE_MB ?? "100") * 1024 * 1024;
 export const MAX_CONSECUTIVE_CACHED = 5;
 export const FORCE_SYNC_POSTS =
   (process.env.FORCE_SYNC_POSTS ?? "false") === "true";
