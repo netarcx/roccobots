@@ -120,6 +120,7 @@ export class BotManager extends EventEmitter {
       id: Number(botConfig.id),
       twitterHandle: botConfig.twitterHandle,
       syncFrequencyMin: Number(botConfig.syncFrequencyMin),
+      adaptivePolling: botConfig.adaptivePolling,
       syncPosts: botConfig.syncPosts,
       syncProfileDescription: botConfig.syncProfileDescription,
       syncProfilePicture: botConfig.syncProfilePicture,
@@ -304,6 +305,12 @@ export class BotManager extends EventEmitter {
           await this.configService.updateBotConfig(id, {
             [field]: value,
           });
+          // Live-apply frequency to the running bot so !frequency / dashboard
+          // edits take effect without a restart.
+          if (key === "frequency" && typeof value === "number") {
+            const bot = this.bots.get(id);
+            if (bot) bot.updateFrequency(value);
+          }
         },
         mute: async (id: number) => {
           const bot = this.bots.get(id);
@@ -634,12 +641,14 @@ export class BotManager extends EventEmitter {
           id,
           twitterHandle: botConfig.twitterHandle,
           syncFrequencyMin: Number(botConfig.syncFrequencyMin),
+          adaptivePolling: botConfig.adaptivePolling,
           syncPosts: botConfig.syncPosts,
           syncProfileDescription: botConfig.syncProfileDescription,
           syncProfilePicture: botConfig.syncProfilePicture,
           syncProfileName: botConfig.syncProfileName,
           syncProfileHeader: botConfig.syncProfileHeader,
           backdateBlueskyPosts: botConfig.backdateBlueskyPosts,
+          transformRules: null,
           platforms: [],
         },
         status: bot ? bot.getStatus() : null,

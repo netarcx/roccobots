@@ -151,5 +151,29 @@ export async function migrate(
     PRIMARY KEY (tweet_id, bot_config_id)
   )`);
 
+  // Add adaptive_polling column to bot_configs (opt-in per-bot)
+  try {
+    db.run(
+      "ALTER TABLE bot_configs ADD COLUMN adaptive_polling INTEGER NOT NULL DEFAULT 0",
+    );
+  } catch (_) {
+    // Column already exists
+  }
+
+  // Add mention_overrides JSON column to bot_configs (per-bot @-rewrite map)
+  try {
+    db.run("ALTER TABLE bot_configs ADD COLUMN mention_overrides TEXT");
+  } catch (_) {
+    // Column already exists
+  }
+
+  // Global @-rewrite map shared across all bots
+  db.run(`CREATE TABLE IF NOT EXISTS mention_overrides (
+    twitter_handle text PRIMARY KEY,
+    bluesky_handle text NOT NULL,
+    created_at integer NOT NULL,
+    updated_at integer NOT NULL
+  )`);
+
   return db as DBType;
 }

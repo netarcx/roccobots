@@ -92,8 +92,8 @@ export const toMetaPost = (tweet: ValidPost): MetaPost => {
     chunk: async (args: SplitTextArgs) => {
       const chunkUrls =
         tweet.isRetweet && tweet.retweetedStatus
-          ? tweet.retweetedStatus.urls ?? []
-          : tweet.urls ?? [];
+          ? (tweet.retweetedStatus.urls ?? [])
+          : (tweet.urls ?? []);
       const entries = extractWordsAndSpacers(text, chunkUrls);
       return buildChunksFromSplitterEntries({
         entries,

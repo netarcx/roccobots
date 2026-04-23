@@ -1,5 +1,6 @@
 import { Scraper as XClient } from "@the-convocation/twitter-scraper";
-import { DBType } from "db";
+import { DBType, Schema } from "db";
+import { eq } from "drizzle-orm";
 import { EventEmitter } from "events";
 import ora, { Ora } from "ora";
 import { BlueskySynchronizerFactory } from "sync/platforms/bluesky";
@@ -9,12 +10,14 @@ import { MisskeySynchronizerFactory } from "sync/platforms/misskey/missky-sync";
 import { syncPosts } from "sync/sync-posts";
 import { syncProfile } from "sync/sync-profile";
 import { SynchronizerFactory, TaggedSynchronizer } from "sync/synchronizer";
+import { MentionMap } from "sync/transforms/apply-mention-overrides";
 import { TransformRulesConfig } from "sync/transforms/transform-types";
 
 export interface BotConfig {
   id: number;
   twitterHandle: string;
   syncFrequencyMin: number;
+  adaptivePolling: boolean;
   syncPosts: boolean;
   syncProfileDescription: boolean;
   syncProfilePicture: boolean;
@@ -27,6 +30,16 @@ export interface BotConfig {
     enabled: boolean;
     credentials: Record<string, string>;
   }[];
+}
+
+const HARD_FLOOR_MIN = 2;
+const HARD_CEILING_MIN = 240;
+
+function computeAdaptiveBounds(baselineMin: number) {
+  return {
+    minMin: Math.max(Math.round(baselineMin * 0.25), HARD_FLOOR_MIN),
+    maxMin: Math.min(Math.round(baselineMin * 4), HARD_CEILING_MIN),
+  };
 }
 
 export interface BotInstanceStatus {
@@ -58,7 +71,8 @@ export class BotInstance extends EventEmitter {
   private db: DBType;
   private xClient: XClient;
   private synchronizers: TaggedSynchronizer[] = [];
-  private syncInterval: NodeJS.Timeout | null = null;
+  private syncTimeout: NodeJS.Timeout | null = null;
+  private currentIntervalMin: number;
   private status: BotInstanceStatus = {
     status: "stopped",
   };
@@ -70,6 +84,7 @@ export class BotInstance extends EventEmitter {
     this.config = config;
     this.db = db;
     this.xClient = xClient;
+    this.currentIntervalMin = config.syncFrequencyMin;
   }
 
   /**
@@ -164,13 +179,99 @@ export class BotInstance extends EventEmitter {
   }
 
   /**
-   * Perform a sync cycle
+   * Load the global mention override map from the DB into a plain object.
+   */
+  private async loadGlobalMentionOverrides(): Promise<MentionMap> {
+    const rows = await this.db.select().from(Schema.MentionOverrides).all();
+    const map: MentionMap = {};
+    for (const r of rows) {
+      map[r.twitterHandle.toLowerCase()] = r.blueskyHandle;
+    }
+    return map;
+  }
+
+  /**
+   * Load this bot's per-bot mention override map fresh from the DB. Runs
+   * each sync cycle so dashboard edits take effect without a bot restart.
+   */
+  private async loadPerBotMentionOverrides(): Promise<MentionMap | null> {
+    const row = await this.db
+      .select({ mentionOverrides: Schema.BotConfigs.mentionOverrides })
+      .from(Schema.BotConfigs)
+      .where(eq(Schema.BotConfigs.id, this.config.id))
+      .get();
+    if (!row?.mentionOverrides) return null;
+    try {
+      const parsed = JSON.parse(row.mentionOverrides);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return null;
+      }
+      const out: MentionMap = {};
+      for (const [k, v] of Object.entries(parsed)) {
+        if (typeof v === "string" && v.length > 0) {
+          out[k.toLowerCase()] = v;
+        }
+      }
+      return Object.keys(out).length > 0 ? out : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /**
+   * Compute the next polling interval in minutes. When adaptive polling is off,
+   * always returns the baseline. When on, accelerates on new activity and
+   * decelerates on idle cycles, clamped to 0.25x–4x of the baseline.
+   */
+  private computeNextIntervalMin(newPostCount: number): number {
+    const baseline = this.config.syncFrequencyMin;
+    if (!this.config.adaptivePolling) {
+      this.currentIntervalMin = baseline;
+      return baseline;
+    }
+    const { minMin, maxMin } = computeAdaptiveBounds(baseline);
+    const factor = newPostCount > 0 ? 0.5 : 1.5;
+    const next = Math.max(
+      minMin,
+      Math.min(maxMin, Math.round(this.currentIntervalMin * factor)),
+    );
+    this.currentIntervalMin = next;
+    return next;
+  }
+
+  /**
+   * Schedule the next sync via setTimeout. Safe to call repeatedly — always
+   * clears any pending timeout first.
+   */
+  private scheduleNextSync(delayMin: number): void {
+    if (this.syncTimeout) {
+      clearTimeout(this.syncTimeout);
+      this.syncTimeout = null;
+    }
+    if (!this.isRunning) return;
+    this.syncTimeout = setTimeout(
+      () => {
+        if (this.isRunning) {
+          this.performSync();
+        }
+      },
+      delayMin * 60 * 1000,
+    );
+  }
+
+  /**
+   * Perform a sync cycle. Self-schedules the next run at the end (even on
+   * failure) so the loop continues.
    */
   private async performSync(): Promise<void> {
     if (this.isMuted) {
       this.emitLog("info", "Sync skipped (bot is muted)");
+      this.scheduleNextSync(this.config.syncFrequencyMin);
       return;
     }
+
+    let newPostCount = 0;
+    let syncFailed = false;
 
     try {
       this.emitLog("info", `Starting sync for @${this.config.twitterHandle}`);
@@ -199,7 +300,14 @@ export class BotInstance extends EventEmitter {
 
       // Sync posts if enabled
       if (this.config.syncPosts) {
-        await syncPosts({
+        // Load mention maps fresh each cycle — tables are tiny and this
+        // avoids stale state when the maps are edited from the dashboard.
+        const [globalMentionOverrides, perBotMentionOverrides] =
+          await Promise.all([
+            this.loadGlobalMentionOverrides(),
+            this.loadPerBotMentionOverrides(),
+          ]);
+        const result = await syncPosts({
           db: this.db,
           handle: {
             handle: this.config.twitterHandle,
@@ -211,26 +319,18 @@ export class BotInstance extends EventEmitter {
           synchronizers: this.synchronizers,
           onLog,
           transformRules: this.config.transformRules,
+          perBotMentionOverrides,
+          globalMentionOverrides,
         });
+        newPostCount = result?.newPostCount ?? 0;
       } else {
         this.emitLog("info", "Post syncing is disabled");
       }
 
-      const now = new Date();
-      const nextSync = new Date(
-        now.getTime() + this.config.syncFrequencyMin * 60 * 1000,
-      );
-
-      this.updateStatus({
-        status: "running",
-        lastSyncAt: now,
-        nextSyncAt: nextSync,
-        errorMessage: undefined,
-      });
-
       this.emitLog("success", `@${this.config.twitterHandle} is up-to-date`);
       this.emit("syncComplete");
     } catch (error) {
+      syncFailed = true;
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       this.emitLog("error", `Sync failed: ${errorMessage}`);
@@ -243,13 +343,59 @@ export class BotInstance extends EventEmitter {
         error instanceof Error ? error : new Error(String(error)),
       );
     }
+
+    // Schedule the next run regardless of success/failure. On failure, fall
+    // back to the baseline interval rather than adapting off partial data.
+    const nextIntervalMin = syncFailed
+      ? this.config.syncFrequencyMin
+      : this.computeNextIntervalMin(newPostCount);
+    const now = new Date();
+    const nextSync = new Date(now.getTime() + nextIntervalMin * 60 * 1000);
+
+    if (!syncFailed) {
+      this.updateStatus({
+        status: "running",
+        lastSyncAt: now,
+        nextSyncAt: nextSync,
+        errorMessage: undefined,
+      });
+    } else {
+      this.updateStatus({ nextSyncAt: nextSync });
+    }
+
+    this.scheduleNextSync(nextIntervalMin);
   }
 
   /**
-   * Trigger an immediate sync cycle (used by command handler)
+   * Trigger an immediate sync cycle (used by command handler). Cancels any
+   * pending scheduled sync so we don't end up with two concurrent timers —
+   * performSync will self-schedule the next run.
    */
   async triggerSync(): Promise<void> {
+    if (this.syncTimeout) {
+      clearTimeout(this.syncTimeout);
+      this.syncTimeout = null;
+    }
     await this.performSync();
+  }
+
+  /**
+   * Update the sync frequency baseline on a running bot and reschedule.
+   * Called by BotManager when the user changes frequency via dashboard or
+   * the !frequency Bluesky command.
+   */
+  updateFrequency(newBaselineMin: number): void {
+    this.config.syncFrequencyMin = newBaselineMin;
+    this.currentIntervalMin = newBaselineMin;
+    this.emitLog(
+      "info",
+      `Sync frequency updated to ${newBaselineMin} min (rescheduling)`,
+    );
+    if (this.isRunning) {
+      this.scheduleNextSync(newBaselineMin);
+      const nextSync = new Date(Date.now() + newBaselineMin * 60 * 1000);
+      this.updateStatus({ nextSyncAt: nextSync });
+    }
   }
 
   /**
@@ -296,23 +442,13 @@ export class BotInstance extends EventEmitter {
         );
       }
 
-      // Perform initial sync
+      // Perform initial sync — performSync self-schedules the next run.
       await this.performSync();
 
-      // Set up sync interval
-      this.syncInterval = setInterval(
-        () => {
-          if (this.isRunning) {
-            this.performSync();
-          }
-        },
-        this.config.syncFrequencyMin * 60 * 1000,
-      );
-
-      this.emitLog(
-        "info",
-        `Sync scheduled every ${this.config.syncFrequencyMin} minutes`,
-      );
+      const modeLabel = this.config.adaptivePolling
+        ? `adaptive (baseline ${this.config.syncFrequencyMin} min, 0.25x–4x)`
+        : `every ${this.config.syncFrequencyMin} minutes`;
+      this.emitLog("info", `Sync scheduled ${modeLabel}`);
     } catch (error) {
       this.isRunning = false;
       const errorMessage =
@@ -335,9 +471,9 @@ export class BotInstance extends EventEmitter {
 
     this.isRunning = false;
 
-    if (this.syncInterval) {
-      clearInterval(this.syncInterval);
-      this.syncInterval = null;
+    if (this.syncTimeout) {
+      clearTimeout(this.syncTimeout);
+      this.syncTimeout = null;
     }
 
     this.updateStatus({

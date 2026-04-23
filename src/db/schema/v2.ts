@@ -39,6 +39,10 @@ export const BotConfigs = sqliteTable("bot_configs", {
   analyticsEnabled: integer("analytics_enabled", { mode: "boolean" })
     .notNull()
     .default(true),
+  adaptivePolling: integer("adaptive_polling", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  mentionOverrides: text("mention_overrides"), // JSON { [twitterHandleLower]: blueskyHandle } — nullable; missing keys fall back to global
   transformRules: text("transform_rules"), // JSON TransformRulesConfig
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
@@ -159,6 +163,22 @@ export const TweetMetrics = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.tweetId, t.botConfigId] })],
 );
+
+/**
+ * Global mention overrides - shared across bots. Rewrites @twitterHandle →
+ * @blueskyHandle when a bot posts to Bluesky. Per-bot overrides
+ * (bot_configs.mention_overrides) take precedence; absent keys fall back here.
+ */
+export const MentionOverrides = sqliteTable("mention_overrides", {
+  twitterHandle: text("twitter_handle").primaryKey(), // lowercased for case-insensitive lookup
+  blueskyHandle: text("bluesky_handle").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+    .notNull()
+    .$defaultFn(() => new Date()),
+});
 
 /**
  * Web sessions - session storage for web interface authentication

@@ -23,6 +23,7 @@ const createBotSchema = z.object({
   twitterHandle: z.string().min(1, "Twitter handle is required"),
   enabled: z.boolean().optional(),
   syncFrequencyMin: z.number().int().min(1).optional(),
+  adaptivePolling: z.boolean().optional(),
   syncPosts: z.boolean().optional(),
   syncProfileDescription: z.boolean().optional(),
   syncProfilePicture: z.boolean().optional(),

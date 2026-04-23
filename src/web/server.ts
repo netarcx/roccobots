@@ -9,6 +9,7 @@ import authRouter from "./routes/api/auth";
 import botsRouter from "./routes/api/bots";
 import commandsRouter from "./routes/api/commands";
 import eventsRouter from "./routes/api/events";
+import mentionsRouter from "./routes/api/mentions";
 import systemRouter from "./routes/api/system";
 import { BotManager } from "./services/bot-manager";
 import { importFromEnv } from "./services/config-migration";
@@ -56,6 +57,7 @@ export function createServer(options: ServerOptions) {
   app.route("/api/analytics", analyticsRouter);
   app.route("/api/bots", botsRouter);
   app.route("/api/bots", commandsRouter);
+  app.route("/api/mentions", mentionsRouter);
   app.route("/api/system", systemRouter);
   app.route("/api/events", eventsRouter);
 

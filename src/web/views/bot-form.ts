@@ -9,6 +9,7 @@ interface BotData {
   id?: number;
   twitterHandle?: string;
   syncFrequencyMin?: number;
+  adaptivePolling?: boolean;
   syncPosts?: boolean;
   syncProfileDescription?: boolean;
   syncProfilePicture?: boolean;
@@ -91,6 +92,10 @@ export function botFormPage(bot?: BotData): string {
               <label class="block text-sm text-slate-400 mb-1">Sync Frequency (minutes)</label>
               <input type="number" id="syncFrequencyMin" value="${bot?.syncFrequencyMin ?? 30}" min="1" required
                 class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500">
+              <p class="text-xs text-slate-500 mt-1">When adaptive polling is on, this is the baseline; the bot polls between 0.25× and 4× this value based on activity.</p>
+            </div>
+            <div>
+              ${checkbox("adaptivePolling", "Adaptive polling (auto-adjust interval based on activity)", bot?.adaptivePolling ?? false)}
             </div>
           </div>
         </div>
@@ -136,6 +141,26 @@ export function botFormPage(bot?: BotData): string {
         ${
           isEdit
             ? `
+        <!-- Mention Overrides (per-bot) -->
+        <div class="bg-slate-800 border border-slate-700 rounded-lg p-6 mb-6">
+          <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wide mb-4">Per-Bot Mention Overrides</h2>
+          <p class="text-sm text-slate-400 mb-4">Override global rewrites for this bot only. Applied when posting to Bluesky. Leave empty to fall back to the global map.</p>
+          <div id="bot-mentions-list" class="space-y-2 mb-4"></div>
+          <form onsubmit="addBotMention(event)" class="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-end">
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">Twitter handle</label>
+              <input type="text" id="botNewTwitter" placeholder="foo"
+                class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500">
+            </div>
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">Bluesky handle</label>
+              <input type="text" id="botNewBluesky" placeholder="foo.bsky.social"
+                class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500">
+            </div>
+            <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-2 rounded transition-colors">Add</button>
+          </form>
+        </div>
+
         <!-- Commands -->
         <div class="bg-slate-800 border border-slate-700 rounded-lg p-6 mb-6">
           <div class="flex items-center justify-between mb-4">
@@ -350,6 +375,7 @@ export function botFormPage(bot?: BotData): string {
           const body = {
             twitterHandle: document.getElementById('twitterHandle').value,
             syncFrequencyMin: parseInt(document.getElementById('syncFrequencyMin').value),
+            adaptivePolling: document.getElementById('adaptivePolling').checked,
             syncPosts: document.getElementById('syncPosts').checked,
             syncProfileDescription: document.getElementById('syncProfileDescription').checked,
             syncProfilePicture: document.getElementById('syncProfilePicture').checked,
@@ -537,6 +563,77 @@ export function botFormPage(bot?: BotData): string {
 
       if (isEdit && botId) {
         loadCommandConfig();
+        loadBotMentions();
+      }
+
+      // --- Per-bot mention overrides ---
+      let botMentionMap = {};
+
+      function renderBotMentions() {
+        const container = document.getElementById('bot-mentions-list');
+        if (!container) return;
+        const keys = Object.keys(botMentionMap).sort();
+        if (keys.length === 0) {
+          container.innerHTML = '<div class="text-sm text-slate-500">No per-bot overrides. Falling back to global map.</div>';
+          return;
+        }
+        container.innerHTML = keys.map(tw => {
+          const bsky = botMentionMap[tw];
+          return '<div class="flex items-center gap-2 text-sm">' +
+            '<span class="text-slate-300 font-mono">@' + escapeHtml(tw) + '</span>' +
+            '<span class="text-slate-500">→</span>' +
+            '<span class="text-slate-300 font-mono flex-1 truncate">@' + escapeHtml(bsky) + '</span>' +
+            '<button type="button" onclick="removeBotMention(\\'' + encodeURIComponent(tw).replace(/'/g, "\\\\'") + '\\')" class="text-xs text-red-400 hover:text-red-300 px-2">Remove</button>' +
+          '</div>';
+        }).join('');
+      }
+
+      async function loadBotMentions() {
+        if (!botId) return;
+        try {
+          const res = await fetch('/api/mentions/bot/' + botId);
+          const data = await res.json();
+          botMentionMap = data.mentionOverrides || {};
+          renderBotMentions();
+        } catch (_) {
+          // Leave empty
+          renderBotMentions();
+        }
+      }
+
+      function addBotMention(e) {
+        e.preventDefault();
+        const twEl = document.getElementById('botNewTwitter');
+        const bsEl = document.getElementById('botNewBluesky');
+        const tw = twEl.value.trim().replace(/^@/, '').toLowerCase();
+        const bs = bsEl.value.trim().replace(/^@/, '');
+        if (!tw || !bs) { showToast('Both handles required', 'error'); return; }
+        botMentionMap[tw] = bs;
+        twEl.value = '';
+        bsEl.value = '';
+        renderBotMentions();
+        saveBotMentions();
+      }
+
+      function removeBotMention(twEncoded) {
+        const tw = decodeURIComponent(twEncoded);
+        delete botMentionMap[tw];
+        renderBotMentions();
+        saveBotMentions();
+      }
+
+      async function saveBotMentions() {
+        if (!botId) return;
+        try {
+          const res = await fetch('/api/mentions/bot/' + botId, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mentionOverrides: botMentionMap }),
+          });
+          if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Save failed'); }
+        } catch (err) {
+          showToast(err.message || 'Failed to save per-bot overrides', 'error');
+        }
       }
 
       // Load recent logs for edit mode

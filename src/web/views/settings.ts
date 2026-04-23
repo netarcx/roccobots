@@ -55,6 +55,30 @@ export function settingsPage(data: SettingsData): string {
         </form>
       </div>
 
+      <!-- Global Mention Overrides -->
+      <div class="bg-slate-800 border border-slate-700 rounded-lg p-6 mb-6">
+        <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wide mb-4">Global Mention Overrides</h2>
+        <p class="text-sm text-slate-400 mb-4">Rewrite <code>@twitterHandle</code> to <code>@blueskyHandle</code> when a bot posts to Bluesky. Shared across all bots; per-bot overrides take precedence. Handles are matched case-insensitively.</p>
+
+        <div id="mentions-list" class="space-y-2 mb-4">
+          <div class="text-sm text-slate-500">Loading...</div>
+        </div>
+
+        <form id="add-mention-form" onsubmit="addGlobalMention(event)" class="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-end">
+          <div>
+            <label class="block text-xs text-slate-500 mb-1">Twitter handle</label>
+            <input type="text" id="newTwitterHandle" required placeholder="foo"
+              class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500">
+          </div>
+          <div>
+            <label class="block text-xs text-slate-500 mb-1">Bluesky handle</label>
+            <input type="text" id="newBlueskyHandle" required placeholder="foo.bsky.social"
+              class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500">
+          </div>
+          <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-2 rounded transition-colors">Add</button>
+        </form>
+      </div>
+
       <!-- Backup & Restore -->
       <div class="bg-slate-800 border border-slate-700 rounded-lg p-6 mb-6">
         <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wide mb-4">Backup &amp; Restore</h2>
@@ -91,6 +115,78 @@ export function settingsPage(data: SettingsData): string {
     scripts: `
     <script>
       let pendingRestoreData = null;
+
+      // --- Global mention overrides ---
+      function escapeHtml(str) {
+        const d = document.createElement('div');
+        d.textContent = str;
+        return d.innerHTML;
+      }
+
+      async function loadGlobalMentions() {
+        const container = document.getElementById('mentions-list');
+        if (!container) return;
+        try {
+          const res = await fetch('/api/mentions');
+          const data = await res.json();
+          const map = data.mentionOverrides || {};
+          const keys = Object.keys(map).sort();
+          if (keys.length === 0) {
+            container.innerHTML = '<div class="text-sm text-slate-500">No overrides configured.</div>';
+            return;
+          }
+          container.innerHTML = keys.map(tw => {
+            const bsky = map[tw];
+            return '<div class="flex items-center gap-2 text-sm">' +
+              '<span class="text-slate-300 font-mono">@' + escapeHtml(tw) + '</span>' +
+              '<span class="text-slate-500">→</span>' +
+              '<span class="text-slate-300 font-mono flex-1 truncate">@' + escapeHtml(bsky) + '</span>' +
+              '<button type="button" onclick="deleteGlobalMention(\\'' + encodeURIComponent(tw).replace(/'/g, "\\\\'") + '\\')" class="text-xs text-red-400 hover:text-red-300 px-2">Delete</button>' +
+            '</div>';
+          }).join('');
+        } catch (err) {
+          container.innerHTML = '<div class="text-sm text-red-400">Failed to load overrides.</div>';
+        }
+      }
+
+      async function addGlobalMention(e) {
+        e.preventDefault();
+        const twInput = document.getElementById('newTwitterHandle');
+        const bsInput = document.getElementById('newBlueskyHandle');
+        const tw = twInput.value.trim().replace(/^@/, '');
+        const bs = bsInput.value.trim().replace(/^@/, '');
+        if (!tw || !bs) { showToast('Both handles required', 'error'); return; }
+        try {
+          const res = await fetch('/api/mentions', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ twitterHandle: tw, blueskyHandle: bs }),
+          });
+          if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Save failed'); }
+          twInput.value = '';
+          bsInput.value = '';
+          showToast('Override saved', 'success');
+          loadGlobalMentions();
+        } catch (err) {
+          showToast(err.message || 'Save failed', 'error');
+        }
+      }
+
+      async function deleteGlobalMention(twEncoded) {
+        const tw = decodeURIComponent(twEncoded);
+        if (!confirm('Remove override for @' + tw + '?')) return;
+        try {
+          const res = await fetch('/api/mentions/' + encodeURIComponent(tw), { method: 'DELETE' });
+          if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Delete failed'); }
+          showToast('Override removed', 'success');
+          loadGlobalMentions();
+        } catch (err) {
+          showToast(err.message || 'Delete failed', 'error');
+        }
+      }
+
+      loadGlobalMentions();
+
 
       function handleRestoreFile(input) {
         const file = input.files[0];

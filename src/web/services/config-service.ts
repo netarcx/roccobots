@@ -25,6 +25,7 @@ export interface CreateBotConfigInput {
   twitterHandle: string;
   enabled?: boolean;
   syncFrequencyMin?: number;
+  adaptivePolling?: boolean;
   syncPosts?: boolean;
   syncProfileDescription?: boolean;
   syncProfilePicture?: boolean;
@@ -38,6 +39,7 @@ export interface UpdateBotConfigInput {
   twitterHandle?: string;
   enabled?: boolean;
   syncFrequencyMin?: number;
+  adaptivePolling?: boolean;
   syncPosts?: boolean;
   syncProfileDescription?: boolean;
   syncProfilePicture?: boolean;
@@ -52,6 +54,7 @@ export interface BotConfigOutput {
   twitterHandle: string;
   enabled: boolean;
   syncFrequencyMin: number;
+  adaptivePolling: boolean;
   syncPosts: boolean;
   syncProfileDescription: boolean;
   syncProfilePicture: boolean;
@@ -108,6 +111,7 @@ export class ConfigService {
         twitterPassword: "",
         enabled: input.enabled ?? true,
         syncFrequencyMin: input.syncFrequencyMin ?? 30,
+        adaptivePolling: input.adaptivePolling ?? false,
         syncPosts: input.syncPosts ?? true,
         syncProfileDescription: input.syncProfileDescription ?? true,
         syncProfilePicture: input.syncProfilePicture ?? true,
@@ -145,6 +149,7 @@ export class ConfigService {
       twitterHandle: botConfig.twitterHandle,
       enabled: botConfig.enabled,
       syncFrequencyMin: Number(botConfig.syncFrequencyMin),
+      adaptivePolling: botConfig.adaptivePolling,
       syncPosts: botConfig.syncPosts,
       syncProfileDescription: botConfig.syncProfileDescription,
       syncProfilePicture: botConfig.syncProfilePicture,
@@ -590,6 +595,101 @@ export class ConfigService {
       .update(Schema.BotConfigs)
       .set({
         transformRules: JSON.stringify(rules),
+        updatedAt: new Date(),
+      })
+      .where(eq(Schema.BotConfigs.id, botId));
+  }
+
+  /**
+   * Get global mention overrides as a plain map: twitterHandle → blueskyHandle.
+   * Keys are stored lowercase for case-insensitive lookup.
+   */
+  async getGlobalMentionOverrides(): Promise<Record<string, string>> {
+    const rows = await this.db.select().from(Schema.MentionOverrides).all();
+    const map: Record<string, string> = {};
+    for (const r of rows) map[r.twitterHandle] = r.blueskyHandle;
+    return map;
+  }
+
+  /**
+   * Upsert a single global mention override. Twitter handle is normalized to
+   * lowercase; Bluesky handle is stored verbatim (DIDs and host-style handles
+   * preserve case).
+   */
+  async upsertGlobalMentionOverride(
+    twitterHandle: string,
+    blueskyHandle: string,
+  ): Promise<void> {
+    const tw = twitterHandle.trim().replace(/^@/, "").toLowerCase();
+    const bsky = blueskyHandle.trim().replace(/^@/, "");
+    if (!tw || !bsky) throw new Error("Both handles are required");
+    const now = new Date();
+    await this.db
+      .insert(Schema.MentionOverrides)
+      .values({
+        twitterHandle: tw,
+        blueskyHandle: bsky,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: Schema.MentionOverrides.twitterHandle,
+        set: { blueskyHandle: bsky, updatedAt: now },
+      });
+  }
+
+  async deleteGlobalMentionOverride(twitterHandle: string): Promise<void> {
+    const tw = twitterHandle.trim().replace(/^@/, "").toLowerCase();
+    await this.db
+      .delete(Schema.MentionOverrides)
+      .where(eq(Schema.MentionOverrides.twitterHandle, tw));
+  }
+
+  /**
+   * Get per-bot mention overrides. Returns {} when the column is null/unparsable.
+   */
+  async getBotMentionOverrides(botId: number): Promise<Record<string, string>> {
+    const row = await this.db
+      .select({ mentionOverrides: Schema.BotConfigs.mentionOverrides })
+      .from(Schema.BotConfigs)
+      .where(eq(Schema.BotConfigs.id, botId))
+      .get();
+    if (!row?.mentionOverrides) return {};
+    try {
+      const parsed = JSON.parse(row.mentionOverrides);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        const out: Record<string, string> = {};
+        for (const [k, v] of Object.entries(parsed)) {
+          if (typeof v === "string" && v.length > 0) {
+            out[k.toLowerCase()] = v;
+          }
+        }
+        return out;
+      }
+    } catch (_) {
+      // fall through
+    }
+    return {};
+  }
+
+  /**
+   * Replace per-bot mention overrides. Pass an empty object to clear them.
+   */
+  async setBotMentionOverrides(
+    botId: number,
+    map: Record<string, string>,
+  ): Promise<void> {
+    const normalized: Record<string, string> = {};
+    for (const [k, v] of Object.entries(map)) {
+      const key = String(k).trim().replace(/^@/, "").toLowerCase();
+      const val = String(v).trim().replace(/^@/, "");
+      if (key && val) normalized[key] = val;
+    }
+    const isEmpty = Object.keys(normalized).length === 0;
+    await this.db
+      .update(Schema.BotConfigs)
+      .set({
+        mentionOverrides: isEmpty ? null : JSON.stringify(normalized),
         updatedAt: new Date(),
       })
       .where(eq(Schema.BotConfigs.id, botId));

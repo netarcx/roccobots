@@ -17,6 +17,10 @@ import { buildChunksFromSplitterEntries } from "utils/tweet/split-tweet-text/spl
 
 import { getPostStore } from "../utils/get-post-store";
 import type { TaggedSynchronizer } from "./synchronizer";
+import {
+  applyMentionOverrides,
+  MentionMap,
+} from "./transforms/apply-mention-overrides";
 import { applyTransformRules } from "./transforms/apply-transforms";
 import { TransformRulesConfig } from "./transforms/transform-types";
 
@@ -39,8 +43,19 @@ export async function syncPosts(args: {
   synchronizers: TaggedSynchronizer[];
   onLog?: SyncLogCallback;
   transformRules?: TransformRulesConfig | null;
+  perBotMentionOverrides?: MentionMap | null;
+  globalMentionOverrides?: MentionMap | null;
 }) {
-  const { db, handle, x, synchronizers, onLog, transformRules } = args;
+  const {
+    db,
+    handle,
+    x,
+    synchronizers,
+    onLog,
+    transformRules,
+    perBotMentionOverrides,
+    globalMentionOverrides,
+  } = args;
   if (!synchronizers.filter((s) => s.syncPost).length) {
     return;
   }
@@ -53,6 +68,7 @@ export async function syncPosts(args: {
 
   let cachedCounter = 0;
   let counter = 0;
+  let newPostCount = 0;
   try {
     if (DEBUG) console.log("getting", handle);
     const iter = x.getTweets(handle.handle, MAX_TWEET);
@@ -98,34 +114,41 @@ export async function syncPosts(args: {
             prefixText: oraPrefixer(`${s.emoji} ${s.displayName}`),
           });
           try {
-            // Apply per-platform text transforms
+            // Apply per-platform text transforms, then mention overrides.
             let tweetForPlatform = metaTweet;
+            let finalText = metaTweet.text;
             if (transformRules) {
-              const transformed = applyTransformRules(
-                metaTweet.text,
+              finalText = applyTransformRules(
+                finalText,
                 transformRules,
                 s.platformId,
               );
-              if (transformed !== metaTweet.text) {
-                tweetForPlatform = {
-                  ...metaTweet,
-                  text: transformed,
-                  chunk: async (chunkArgs) => {
-                    const entries = extractWordsAndSpacers(
-                      transformed,
-                      tweet.urls ?? [],
-                    );
-                    return buildChunksFromSplitterEntries({
-                      entries,
-                      quotedStatusId: tweet.quotedStatusId,
-                      maxChunkSize: chunkArgs.maxChunkSize,
-                      quotedStatusLinkSection:
-                        chunkArgs.quotedStatusLinkSection ?? "",
-                      appendQuoteLink: chunkArgs.appendQuoteLink,
-                    });
-                  },
-                };
-              }
+            }
+            finalText = applyMentionOverrides(finalText, {
+              platformId: s.platformId,
+              perBot: perBotMentionOverrides,
+              global: globalMentionOverrides,
+            });
+            if (finalText !== metaTweet.text) {
+              const textForChunks = finalText;
+              tweetForPlatform = {
+                ...metaTweet,
+                text: textForChunks,
+                chunk: async (chunkArgs) => {
+                  const entries = extractWordsAndSpacers(
+                    textForChunks,
+                    tweet.urls ?? [],
+                  );
+                  return buildChunksFromSplitterEntries({
+                    entries,
+                    quotedStatusId: tweet.quotedStatusId,
+                    maxChunkSize: chunkArgs.maxChunkSize,
+                    quotedStatusLinkSection:
+                      chunkArgs.quotedStatusLinkSection ?? "",
+                    appendQuoteLink: chunkArgs.appendQuoteLink,
+                  });
+                },
+              };
             }
 
             platformLog.text = `| syncing ${s.emoji} ${s.displayName}...`;
@@ -194,6 +217,7 @@ export async function syncPosts(args: {
             set: { synced: 1 },
           })
           .run();
+        newPostCount++;
       } catch (e) {
         logError(log, e)`Failed to sync tweet: ${e}`;
         console.error(e);
@@ -207,4 +231,5 @@ export async function syncPosts(args: {
 
   log.succeed("synced");
   onLog?.("success", `Post sync complete (${counter} tweets checked)`);
+  return { newPostCount };
 }
