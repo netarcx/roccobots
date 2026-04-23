@@ -1,9 +1,8 @@
-import { Agent, AppBskyVideoDefs } from "@atproto/api";
+import AtpAgent, { AppBskyVideoDefs } from "@atproto/api";
 import type { BlobRef } from "@atproto/lexicon";
 import type { Ora } from "ora";
 
 const VIDEO_SERVICE = "https://video.bsky.app";
-const VIDEO_SERVICE_DID = "did:web:video.bsky.app";
 const MAX_POLL_MS = 5 * 60 * 1000; // 5 minutes — video processing can be slow for large files
 const INITIAL_POLL_MS = 1500;
 const MAX_POLL_INTERVAL_MS = 10_000;
@@ -17,7 +16,9 @@ const MAX_POLL_INTERVAL_MS = 10_000;
  * processes them asynchronously with a job queue.
  *
  * Flow:
- *   1. Request a service-auth token scoped to video.bsky.app.
+ *   1. Request a service-auth token whose audience is the USER'S PDS DID
+ *      (video.bsky.app validates the token by checking the signature against
+ *      the PDS's key — not by matching its own DID, which is a common pitfall).
  *   2. Check the user's daily quota (optional — skips upload if exhausted).
  *   3. POST the video blob to app.bsky.video.uploadVideo.
  *   4. Poll app.bsky.video.getJobStatus with exponential backoff until the
@@ -25,16 +26,23 @@ const MAX_POLL_INTERVAL_MS = 10_000;
  *   5. Return the resulting BlobRef for use in an app.bsky.embed.video record.
  */
 export async function uploadBlueskyVideo(
-  agent: Agent,
+  agent: AtpAgent,
   videoBlob: Blob,
   log: Ora,
 ): Promise<BlobRef> {
   const did = agent.did;
   if (!did) throw new Error("Bluesky agent has no DID — not authenticated");
 
-  // 1. Service-auth token for video.bsky.app, scoped to the upload lexicon.
+  // `agent.dispatchUrl` reflects the user's actual PDS (populated from the
+  // DID doc during login — can differ from the initial entrypoint when the
+  // user lives on a federated/custom PDS).
+  const pdsHost = agent.dispatchUrl.hostname;
+  const pdsDid = `did:web:${pdsHost}`;
+
+  // 1. Service-auth token signed by the user's PDS. The video service trusts
+  //    the PDS and validates the signature against the PDS's DID doc.
   const { data: serviceAuth } = await agent.com.atproto.server.getServiceAuth({
-    aud: VIDEO_SERVICE_DID,
+    aud: pdsDid,
     lxm: "com.atproto.repo.uploadBlob",
     exp: Math.floor(Date.now() / 1000) + 60 * 30,
   });
