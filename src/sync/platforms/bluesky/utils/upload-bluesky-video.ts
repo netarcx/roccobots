@@ -106,31 +106,36 @@ export async function uploadBlueskyVideo(
     );
   }
 
-  let uploadData: {
-    jobStatus?: AppBskyVideoDefs.JobStatus;
-    error?: string;
-    message?: string;
-  };
+  let parsed: Record<string, unknown>;
   try {
-    uploadData = JSON.parse(rawBody);
+    parsed = JSON.parse(rawBody);
   } catch (_) {
     throw new Error(
       `Video upload returned non-JSON body: ${rawBody.slice(0, 500)}`,
     );
   }
 
-  // Bluesky's video service sometimes returns 200 with a top-level {error,
-  // message} instead of a jobStatus (e.g., when the same video has already
-  // been submitted and is still processing). Surface that clearly.
-  if (uploadData.error) {
-    throw new Error(
-      `Video upload rejected: ${uploadData.error}${
-        uploadData.message ? ` — ${uploadData.message}` : ""
-      }`,
-    );
+  // Normalize the response to a JobStatus. The lexicon documents a
+  // `{jobStatus: {...}}` envelope, but video.bsky.app actually returns the
+  // JobStatus fields flat at the top level. Accept either shape.
+  let jobStatus: AppBskyVideoDefs.JobStatus | undefined;
+  if (
+    parsed.jobStatus &&
+    typeof parsed.jobStatus === "object" &&
+    parsed.jobStatus !== null
+  ) {
+    jobStatus = parsed.jobStatus as AppBskyVideoDefs.JobStatus;
+  } else if (typeof parsed.jobId === "string") {
+    jobStatus = parsed as unknown as AppBskyVideoDefs.JobStatus;
   }
 
-  let jobStatus: AppBskyVideoDefs.JobStatus | undefined = uploadData.jobStatus;
+  // If there's no usable jobStatus but the body carries an error field,
+  // surface it (happens for validation rejections returned as 200).
+  if (!jobStatus && typeof parsed.error === "string") {
+    const msg =
+      typeof parsed.message === "string" ? ` — ${parsed.message}` : "";
+    throw new Error(`Video upload rejected: ${parsed.error}${msg}`);
+  }
 
   // Dedup shortcut: if Bluesky already has a processed blob for this video
   // (e.g., the same bytes were submitted on a previous retry attempt), it
