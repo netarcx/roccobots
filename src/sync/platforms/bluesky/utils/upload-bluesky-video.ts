@@ -96,19 +96,53 @@ export async function uploadBlueskyVideo(
     body: videoBlob,
   });
 
+  // Read the body as text first so we can include it in error messages
+  // regardless of how the response is shaped.
+  const rawBody = await uploadRes.text().catch(() => "<unreadable>");
+
   if (!uploadRes.ok) {
-    const body = await uploadRes.text().catch(() => "<unreadable>");
     throw new Error(
-      `Video upload failed (${uploadRes.status} ${uploadRes.statusText}): ${body.slice(0, 500)}`,
+      `Video upload failed (${uploadRes.status} ${uploadRes.statusText}): ${rawBody.slice(0, 500)}`,
     );
   }
 
-  const uploadData = (await uploadRes.json()) as {
+  let uploadData: {
     jobStatus?: AppBskyVideoDefs.JobStatus;
+    error?: string;
+    message?: string;
   };
+  try {
+    uploadData = JSON.parse(rawBody);
+  } catch (_) {
+    throw new Error(
+      `Video upload returned non-JSON body: ${rawBody.slice(0, 500)}`,
+    );
+  }
+
+  // Bluesky's video service sometimes returns 200 with a top-level {error,
+  // message} instead of a jobStatus (e.g., when the same video has already
+  // been submitted and is still processing). Surface that clearly.
+  if (uploadData.error) {
+    throw new Error(
+      `Video upload rejected: ${uploadData.error}${
+        uploadData.message ? ` — ${uploadData.message}` : ""
+      }`,
+    );
+  }
+
   let jobStatus: AppBskyVideoDefs.JobStatus | undefined = uploadData.jobStatus;
+
+  // Dedup shortcut: if Bluesky already has a processed blob for this video
+  // (e.g., the same bytes were submitted on a previous retry attempt), it
+  // can return the finished BlobRef inline and we can skip polling.
+  if (jobStatus?.blob) {
+    return jobStatus.blob;
+  }
+
   if (!jobStatus?.jobId) {
-    throw new Error("Video upload response missing jobId");
+    throw new Error(
+      `Video upload response missing jobId: ${rawBody.slice(0, 500)}`,
+    );
   }
   const jobId = jobStatus.jobId;
 
