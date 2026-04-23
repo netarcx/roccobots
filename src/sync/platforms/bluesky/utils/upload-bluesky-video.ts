@@ -6,6 +6,52 @@ const VIDEO_SERVICE = "https://video.bsky.app";
 const MAX_POLL_MS = 5 * 60 * 1000; // 5 minutes — video processing can be slow for large files
 const INITIAL_POLL_MS = 1500;
 const MAX_POLL_INTERVAL_MS = 10_000;
+const TOKEN_TTL_SEC = 60 * 30;
+
+/**
+ * Request a service-auth token signed by the user's PDS, scoped to a specific
+ * lexicon method. `video.bsky.app` trusts tokens whose `aud` matches the
+ * user's PDS DID (it verifies the signature against the PDS's DID doc).
+ */
+async function getVideoServiceAuthToken(
+  agent: AtpAgent,
+  lxm: string,
+): Promise<string> {
+  const pdsDid = `did:web:${agent.dispatchUrl.hostname}`;
+  const { data } = await agent.com.atproto.server.getServiceAuth({
+    aud: pdsDid,
+    lxm,
+    exp: Math.floor(Date.now() / 1000) + TOKEN_TTL_SEC,
+  });
+  return data.token;
+}
+
+/**
+ * Normalize an XRPC response body to a JobStatus. The lexicon documents a
+ * `{jobStatus: {...}}` envelope, but video.bsky.app actually returns the
+ * JobStatus fields flat at the top level. Accept either shape.
+ */
+function parseJobStatusBody(
+  rawBody: string,
+): AppBskyVideoDefs.JobStatus | undefined {
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(rawBody);
+  } catch (_) {
+    return undefined;
+  }
+  if (
+    parsed.jobStatus &&
+    typeof parsed.jobStatus === "object" &&
+    parsed.jobStatus !== null
+  ) {
+    return parsed.jobStatus as AppBskyVideoDefs.JobStatus;
+  }
+  if (typeof parsed.jobId === "string") {
+    return parsed as unknown as AppBskyVideoDefs.JobStatus;
+  }
+  return undefined;
+}
 
 /**
  * Upload a video to Bluesky via the dedicated video.bsky.app endpoint.
@@ -16,14 +62,14 @@ const MAX_POLL_INTERVAL_MS = 10_000;
  * processes them asynchronously with a job queue.
  *
  * Flow:
- *   1. Request a service-auth token whose audience is the USER'S PDS DID
- *      (video.bsky.app validates the token by checking the signature against
- *      the PDS's key — not by matching its own DID, which is a common pitfall).
- *   2. Check the user's daily quota (optional — skips upload if exhausted).
- *   3. POST the video blob to app.bsky.video.uploadVideo.
- *   4. Poll app.bsky.video.getJobStatus with exponential backoff until the
- *      server returns JOB_STATE_COMPLETED (or JOB_STATE_FAILED / timeout).
- *   5. Return the resulting BlobRef for use in an app.bsky.embed.video record.
+ *   1. Mint a service-auth token scoped to `com.atproto.repo.uploadBlob` with
+ *      `aud` = the user's PDS DID. video.bsky.app validates it by verifying
+ *      the PDS signature from the user's DID doc.
+ *   2. POST the video blob to app.bsky.video.uploadVideo on video.bsky.app.
+ *   3. Mint a second service-auth token scoped to `app.bsky.video.getJobStatus`
+ *      and poll video.bsky.app directly (the user's PDS may not proxy this
+ *      lexicon — some PDSes return 501 Method Not Implemented).
+ *   4. Return the resulting BlobRef for use in an app.bsky.embed.video record.
  */
 export async function uploadBlueskyVideo(
   agent: AtpAgent,
@@ -33,127 +79,78 @@ export async function uploadBlueskyVideo(
   const did = agent.did;
   if (!did) throw new Error("Bluesky agent has no DID — not authenticated");
 
-  // `agent.dispatchUrl` reflects the user's actual PDS (populated from the
-  // DID doc during login — can differ from the initial entrypoint when the
-  // user lives on a federated/custom PDS).
-  const pdsHost = agent.dispatchUrl.hostname;
-  const pdsDid = `did:web:${pdsHost}`;
+  // 1. Upload token.
+  const uploadToken = await getVideoServiceAuthToken(
+    agent,
+    "com.atproto.repo.uploadBlob",
+  );
 
-  // 1. Service-auth token signed by the user's PDS. The video service trusts
-  //    the PDS and validates the signature against the PDS's DID doc.
-  const { data: serviceAuth } = await agent.com.atproto.server.getServiceAuth({
-    aud: pdsDid,
-    lxm: "com.atproto.repo.uploadBlob",
-    exp: Math.floor(Date.now() / 1000) + 60 * 30,
-  });
-  const token = serviceAuth.token;
-
-  // 2. Quota check — best-effort. If the endpoint is unreachable or rejects
-  //    the lxm-scoped token, fall through and let the upload call surface
-  //    whatever error actually occurs.
-  let limits:
-    | {
-        canUpload?: boolean;
-        message?: string;
-        error?: string;
-        remainingDailyVideos?: number;
-        remainingDailyBytes?: number;
-      }
-    | undefined;
-  try {
-    const limitsRes = await fetch(
-      `${VIDEO_SERVICE}/xrpc/app.bsky.video.getUploadLimits`,
-      { headers: { Authorization: `Bearer ${token}` } },
-    );
-    if (limitsRes.ok) {
-      limits = await limitsRes.json();
-    }
-  } catch (_) {
-    // Ignore — quota check is advisory.
-  }
-  if (limits?.canUpload === false) {
-    throw new Error(
-      `Video upload quota exhausted: ${limits.message || limits.error || "no capacity remaining"}`,
-    );
-  }
-
-  // 3. Upload the video bytes. Pass the Blob directly so the runtime can
-  //    stream the existing buffer instead of materializing a second copy.
+  // 2. Upload. Pass the Blob directly so the runtime streams the existing
+  //    buffer (no second copy); fetch sets Content-Length from blob.size.
   log.text = "Uploading video to Bluesky...";
   const uploadUrl = new URL(`${VIDEO_SERVICE}/xrpc/app.bsky.video.uploadVideo`);
   uploadUrl.searchParams.set("did", did);
   uploadUrl.searchParams.set("name", `tweet-${Date.now()}.mp4`);
 
-  // When the body is a Blob, fetch sets Content-Length from blob.size
-  // automatically — don't pass it manually or the runtime may reject the
-  // duplicate header.
   const uploadRes = await fetch(uploadUrl.toString(), {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${uploadToken}`,
       "Content-Type": "video/mp4",
     },
     body: videoBlob,
   });
 
-  // Read the body as text first so we can include it in error messages
-  // regardless of how the response is shaped.
-  const rawBody = await uploadRes.text().catch(() => "<unreadable>");
-
+  const uploadBody = await uploadRes.text().catch(() => "<unreadable>");
   if (!uploadRes.ok) {
     throw new Error(
-      `Video upload failed (${uploadRes.status} ${uploadRes.statusText}): ${rawBody.slice(0, 500)}`,
+      `Video upload failed (${uploadRes.status} ${uploadRes.statusText}): ${uploadBody.slice(0, 500)}`,
     );
   }
 
-  let parsed: Record<string, unknown>;
-  try {
-    parsed = JSON.parse(rawBody);
-  } catch (_) {
+  let jobStatus = parseJobStatusBody(uploadBody);
+
+  // Surface top-level {error, message} responses (validation rejections
+  // that come back as HTTP 200 with no usable jobStatus).
+  if (!jobStatus) {
+    let parsed: Record<string, unknown> = {};
+    try {
+      parsed = JSON.parse(uploadBody);
+    } catch (_) {
+      // fall through to generic error below
+    }
+    if (typeof parsed.error === "string") {
+      const msg =
+        typeof parsed.message === "string" ? ` — ${parsed.message}` : "";
+      throw new Error(`Video upload rejected: ${parsed.error}${msg}`);
+    }
     throw new Error(
-      `Video upload returned non-JSON body: ${rawBody.slice(0, 500)}`,
+      `Video upload returned unexpected body: ${uploadBody.slice(0, 500)}`,
     );
   }
 
-  // Normalize the response to a JobStatus. The lexicon documents a
-  // `{jobStatus: {...}}` envelope, but video.bsky.app actually returns the
-  // JobStatus fields flat at the top level. Accept either shape.
-  let jobStatus: AppBskyVideoDefs.JobStatus | undefined;
-  if (
-    parsed.jobStatus &&
-    typeof parsed.jobStatus === "object" &&
-    parsed.jobStatus !== null
-  ) {
-    jobStatus = parsed.jobStatus as AppBskyVideoDefs.JobStatus;
-  } else if (typeof parsed.jobId === "string") {
-    jobStatus = parsed as unknown as AppBskyVideoDefs.JobStatus;
-  }
+  // Dedup shortcut: if Bluesky already processed this video on an earlier
+  // retry, it can return the finished BlobRef inline.
+  if (jobStatus.blob) return jobStatus.blob;
 
-  // If there's no usable jobStatus but the body carries an error field,
-  // surface it (happens for validation rejections returned as 200).
-  if (!jobStatus && typeof parsed.error === "string") {
-    const msg =
-      typeof parsed.message === "string" ? ` — ${parsed.message}` : "";
-    throw new Error(`Video upload rejected: ${parsed.error}${msg}`);
-  }
-
-  // Dedup shortcut: if Bluesky already has a processed blob for this video
-  // (e.g., the same bytes were submitted on a previous retry attempt), it
-  // can return the finished BlobRef inline and we can skip polling.
-  if (jobStatus?.blob) {
-    return jobStatus.blob;
-  }
-
-  if (!jobStatus?.jobId) {
+  if (!jobStatus.jobId) {
     throw new Error(
-      `Video upload response missing jobId: ${rawBody.slice(0, 500)}`,
+      `Video upload response missing jobId: ${uploadBody.slice(0, 500)}`,
     );
   }
   const jobId = jobStatus.jobId;
 
-  // 4. Poll for processing completion with exponential backoff. A single
-  //    transient network error shouldn't abort a 5-minute upload, so we
-  //    tolerate one consecutive getJobStatus failure before giving up.
+  // 3. Poll token + poll loop (direct fetch — SDK would route via the PDS,
+  //    which may not proxy app.bsky.video.getJobStatus).
+  const statusToken = await getVideoServiceAuthToken(
+    agent,
+    "app.bsky.video.getJobStatus",
+  );
+  const statusUrl = new URL(
+    `${VIDEO_SERVICE}/xrpc/app.bsky.video.getJobStatus`,
+  );
+  statusUrl.searchParams.set("jobId", jobId);
+
   const pollStart = Date.now();
   let waitMs = INITIAL_POLL_MS;
   let state = jobStatus.state;
@@ -172,14 +169,28 @@ export async function uploadBlueskyVideo(
     log.text = `Processing video on Bluesky (${state}${progressStr})...`;
 
     try {
-      const { data } = await agent.app.bsky.video.getJobStatus({ jobId });
-      jobStatus = data.jobStatus;
+      const res = await fetch(statusUrl.toString(), {
+        headers: { Authorization: `Bearer ${statusToken}` },
+      });
+      const body = await res.text().catch(() => "<unreadable>");
+      if (!res.ok) {
+        throw new Error(
+          `getJobStatus failed (${res.status} ${res.statusText}): ${body.slice(0, 300)}`,
+        );
+      }
+      const next = parseJobStatusBody(body);
+      if (!next) {
+        throw new Error(
+          `getJobStatus returned unexpected body: ${body.slice(0, 300)}`,
+        );
+      }
+      jobStatus = next;
       state = jobStatus.state;
       consecutivePollErrors = 0;
     } catch (err) {
       consecutivePollErrors++;
       if (consecutivePollErrors >= 2) throw err;
-      // else loop, back off, and try again on the next tick
+      // else loop, back off, try again on the next tick
     }
   }
 
