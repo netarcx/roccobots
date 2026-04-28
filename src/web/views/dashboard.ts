@@ -118,6 +118,7 @@ export function dashboardPage(): string {
             '<a href="/bots/' + bot.id + '/logs" class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded transition-colors">Logs</a>' +
             '<div class="flex-1"></div>' +
             '<button onclick="deleteBot(' + bot.id + ')" class="text-xs text-red-400 hover:text-red-300 transition-colors">Delete</button>' +
+            '<button onclick="deleteBotWithData(' + bot.id + ')" class="text-xs text-red-400 hover:text-red-300 transition-colors">Delete &amp; Purge</button>' +
           '</div>' +
         '</div>';
       }
@@ -173,10 +174,19 @@ export function dashboardPage(): string {
       }
 
       async function deleteBot(id) {
-        if (!confirm('Delete this bot? This cannot be undone.')) return;
+        if (!confirm('Delete this bot? Logs and metrics will be kept.')) return;
         try {
           await fetch('/api/bots/' + id, { method: 'DELETE' });
           showToast('Bot deleted', 'success');
+          loadBots();
+        } catch (err) { showToast('Failed to delete bot', 'error'); }
+      }
+
+      async function deleteBotWithData(id) {
+        if (!confirm('Delete this bot AND all its data (logs, metrics, platform configs)? This cannot be undone.')) return;
+        try {
+          await fetch('/api/bots/' + id + '?purge=true', { method: 'DELETE' });
+          showToast('Bot and all data deleted', 'success');
           loadBots();
         } catch (err) { showToast('Failed to delete bot', 'error'); }
       }

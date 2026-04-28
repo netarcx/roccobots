@@ -212,6 +212,30 @@ export class ConfigService {
   }
 
   /**
+   * Delete a bot configuration and all associated data
+   */
+  async deleteBotConfigWithData(id: number): Promise<void> {
+    await this.db
+      .delete(Schema.TweetMetrics)
+      .where(eq(Schema.TweetMetrics.botConfigId, id));
+    await this.db
+      .delete(Schema.SyncLogs)
+      .where(eq(Schema.SyncLogs.botConfigId, id));
+    await this.db
+      .delete(Schema.BotStatus)
+      .where(eq(Schema.BotStatus.botConfigId, id));
+    await this.db
+      .delete(Schema.CommandConfigs)
+      .where(eq(Schema.CommandConfigs.botConfigId, id));
+    await this.db
+      .delete(Schema.PlatformConfigs)
+      .where(eq(Schema.PlatformConfigs.botConfigId, id));
+    await this.db
+      .delete(Schema.BotConfigs)
+      .where(eq(Schema.BotConfigs.id, id));
+  }
+
+  /**
    * Create a platform configuration
    */
   async createPlatformConfig(

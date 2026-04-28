@@ -171,7 +171,12 @@ botsRouter.delete("/:id", async (c) => {
       botManager.stop(id);
     }
 
-    await configService.deleteBotConfig(id);
+    const purge = c.req.query("purge") === "true";
+    if (purge) {
+      await configService.deleteBotConfigWithData(id);
+    } else {
+      await configService.deleteBotConfig(id);
+    }
 
     return c.json({ success: true, message: "Bot deleted" });
   } catch (error) {
