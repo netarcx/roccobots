@@ -624,8 +624,7 @@ export class BotManager extends EventEmitter {
   }
 
   /**
-   * Clear sync history for a bot so all tweets are re-posted on next sync.
-   * Returns the number of tweet IDs cleared.
+   * Set the force-resync flag so all tweets are re-posted on next sync.
    */
   async rebuild(botId: number): Promise<void> {
     const bot = this.bots.get(botId);
