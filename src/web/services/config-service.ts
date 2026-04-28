@@ -230,9 +230,7 @@ export class ConfigService {
     await this.db
       .delete(Schema.PlatformConfigs)
       .where(eq(Schema.PlatformConfigs.botConfigId, id));
-    await this.db
-      .delete(Schema.BotConfigs)
-      .where(eq(Schema.BotConfigs.id, id));
+    await this.db.delete(Schema.BotConfigs).where(eq(Schema.BotConfigs.id, id));
   }
 
   /**

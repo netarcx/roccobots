@@ -188,11 +188,18 @@ export class CommandPoller extends EventEmitter {
     // Parse command
     const command = parseCommand(postText);
     if (!command) {
-      this.emitLog(
-        "info",
-        `Unknown command from @${authorHandle}: ${postText}`,
-      );
-      await this.reply(notification, responses.unknown);
+      if (/!\w/.test(postText)) {
+        this.emitLog(
+          "info",
+          `Unknown command from @${authorHandle}: ${postText}`,
+        );
+        await this.reply(notification, responses.unknown);
+      } else {
+        this.emitLog(
+          "info",
+          `Ignoring non-command mention from @${authorHandle}: ${postText}`,
+        );
+      }
       return;
     }
 
@@ -212,6 +219,17 @@ export class CommandPoller extends EventEmitter {
           await this.executor.sync(this.botId);
           await this.reply(notification, responses.sync);
           break;
+
+        case "rebuild": {
+          await this.reply(notification, responses.rebuild);
+          const cleared = await this.executor.rebuild(this.botId);
+          await this.executor.sync(this.botId);
+          await this.reply(
+            notification,
+            `Rebuild complete. Cleared ${cleared} synced tweets and triggered sync.`,
+          );
+          break;
+        }
 
         case "source":
           if (command.args.length > 0) {

@@ -116,6 +116,7 @@ export function dashboardPage(): string {
             ) +
             '<a href="/bots/' + bot.id + '" class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded transition-colors">Edit</a>' +
             '<a href="/bots/' + bot.id + '/logs" class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded transition-colors">Logs</a>' +
+            '<button onclick="rebuildBot(' + bot.id + ')" class="text-xs bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded transition-colors">Rebuild</button>' +
             '<div class="flex-1"></div>' +
             '<button onclick="deleteBot(' + bot.id + ')" class="text-xs text-red-400 hover:text-red-300 transition-colors">Delete</button>' +
             '<button onclick="deleteBotWithData(' + bot.id + ')" class="text-xs text-red-400 hover:text-red-300 transition-colors">Delete &amp; Purge</button>' +
@@ -180,6 +181,17 @@ export function dashboardPage(): string {
           showToast('Bot deleted', 'success');
           loadBots();
         } catch (err) { showToast('Failed to delete bot', 'error'); }
+      }
+
+      async function rebuildBot(id) {
+        if (!confirm('Rebuild sync history? This will clear all synced tweet records for this bot and re-post them on the next sync. This cannot be undone.')) return;
+        try {
+          const res = await fetch('/api/bots/' + id + '/rebuild', { method: 'POST' });
+          const data = await res.json();
+          if (data.error) { showToast(data.error, 'error'); return; }
+          showToast(data.message, 'success');
+          loadBots();
+        } catch (err) { showToast('Failed to rebuild', 'error'); }
       }
 
       async function deleteBotWithData(id) {

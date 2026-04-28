@@ -185,6 +185,34 @@ botsRouter.delete("/:id", async (c) => {
 });
 
 /**
+ * POST /api/bots/:id/rebuild
+ * Clear sync history so all tweets are re-posted on next sync
+ */
+botsRouter.post("/:id/rebuild", async (c) => {
+  const botManager = c.get("botManager");
+  const id = parseInt(c.req.param("id"));
+
+  if (isNaN(id)) {
+    return c.json({ error: "Invalid bot ID" }, 400);
+  }
+
+  try {
+    const cleared = await botManager.rebuild(id);
+    const running = botManager.isRunning(id);
+    if (running) {
+      await botManager.triggerSync(id);
+    }
+    return c.json({
+      success: true,
+      message: `Cleared ${cleared} synced tweets. ${running ? "Sync triggered." : "Start the bot to begin syncing."}`,
+      cleared,
+    });
+  } catch (error) {
+    return c.json({ error: (error as Error).message }, 400);
+  }
+});
+
+/**
  * POST /api/bots/:id/start
  * Start a bot
  */

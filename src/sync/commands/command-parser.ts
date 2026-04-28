@@ -28,6 +28,11 @@ export function parseCommand(text: string): ParsedCommand | null {
     return { type: "sync", args: [], raw: normalized };
   }
 
+  // Match !rebuild
+  if (/(?:^|\s)!rebuild\b/i.test(normalized)) {
+    return { type: "rebuild", args: [], raw: normalized };
+  }
+
   // Match !source with optional @handle argument
   const sourceMatch = /(?:^|\s)!source(?:\s+@?(\S+))?/i.exec(normalized);
   if (sourceMatch) {
