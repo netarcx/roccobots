@@ -197,15 +197,18 @@ botsRouter.post("/:id/rebuild", async (c) => {
   }
 
   try {
-    const cleared = await botManager.rebuild(id);
     const running = botManager.isRunning(id);
-    if (running) {
-      await botManager.triggerSync(id);
+    if (!running) {
+      return c.json(
+        { error: "Bot must be running to rebuild. Start it first." },
+        400,
+      );
     }
+    await botManager.rebuild(id);
+    await botManager.triggerSync(id);
     return c.json({
       success: true,
-      message: `Cleared ${cleared} synced tweets. ${running ? "Sync triggered." : "Start the bot to begin syncing."}`,
-      cleared,
+      message: "Rebuild triggered. All tweets will be re-synced.",
     });
   } catch (error) {
     return c.json({ error: (error as Error).message }, 400);

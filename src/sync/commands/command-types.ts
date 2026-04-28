@@ -86,7 +86,7 @@ export interface ParsedCommand {
 export interface CommandExecutor {
   restart(botId: number): Promise<void>;
   sync(botId: number): Promise<void>;
-  rebuild(botId: number): Promise<number>;
+  rebuild(botId: number): Promise<void>;
   changeSource(botId: number, newHandle: string): Promise<void>;
   getSource(botId: number): Promise<string>;
   getStatus(botId: number): Promise<string>;

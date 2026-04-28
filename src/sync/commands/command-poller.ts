@@ -221,13 +221,9 @@ export class CommandPoller extends EventEmitter {
           break;
 
         case "rebuild": {
+          await this.executor.rebuild(this.botId);
           await this.reply(notification, responses.rebuild);
-          const cleared = await this.executor.rebuild(this.botId);
           await this.executor.sync(this.botId);
-          await this.reply(
-            notification,
-            `Rebuild complete. Cleared ${cleared} synced tweets and triggered sync.`,
-          );
           break;
         }
 

@@ -78,6 +78,7 @@ export class BotInstance extends EventEmitter {
   };
   private isRunning = false;
   private isMuted = false;
+  private forceResync = false;
 
   constructor(config: BotConfig, db: DBType, xClient: XClient) {
     super();
@@ -307,6 +308,8 @@ export class BotInstance extends EventEmitter {
             this.loadGlobalMentionOverrides(),
             this.loadPerBotMentionOverrides(),
           ]);
+        const resync = this.forceResync;
+        if (resync) this.forceResync = false;
         const result = await syncPosts({
           db: this.db,
           handle: {
@@ -321,6 +324,7 @@ export class BotInstance extends EventEmitter {
           transformRules: this.config.transformRules,
           perBotMentionOverrides,
           globalMentionOverrides,
+          forceResync: resync,
         });
         newPostCount = result?.newPostCount ?? 0;
       } else {
@@ -412,6 +416,13 @@ export class BotInstance extends EventEmitter {
   unmute(): void {
     this.isMuted = false;
     this.emitLog("info", "Bot unmuted — syncing resumed");
+  }
+
+  /**
+   * Set force resync flag — next sync will re-post all tweets
+   */
+  setForceResync(): void {
+    this.forceResync = true;
   }
 
   /**

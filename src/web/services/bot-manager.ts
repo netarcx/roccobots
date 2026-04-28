@@ -1,6 +1,6 @@
 import { Scraper as XClient } from "@the-convocation/twitter-scraper";
 import { DBType, Schema } from "db";
-import { and, count, countDistinct, desc, eq, inArray, lt } from "drizzle-orm";
+import { and, count, countDistinct, desc, eq, lt } from "drizzle-orm";
 import { LOG_RETENTION_DAYS } from "env";
 import { EventEmitter } from "events";
 import { BotConfig, BotInstance, BotInstanceStatus } from "sync/bot-instance";
@@ -627,32 +627,11 @@ export class BotManager extends EventEmitter {
    * Clear sync history for a bot so all tweets are re-posted on next sync.
    * Returns the number of tweet IDs cleared.
    */
-  async rebuild(botId: number): Promise<number> {
-    const logs = await this.db
-      .select({ tweetId: Schema.SyncLogs.tweetId })
-      .from(Schema.SyncLogs)
-      .where(
-        and(
-          eq(Schema.SyncLogs.botConfigId, botId),
-          eq(Schema.SyncLogs.level, "success"),
-        ),
-      )
-      .all();
-    const tweetIds = [
-      ...new Set(logs.map((l) => l.tweetId).filter((id): id is string => !!id)),
-    ];
-    if (tweetIds.length === 0) return 0;
-    const batchSize = 500;
-    for (let i = 0; i < tweetIds.length; i += batchSize) {
-      const batch = tweetIds.slice(i, i + batchSize);
-      await this.db
-        .delete(Schema.TweetSynced)
-        .where(inArray(Schema.TweetSynced.tweetId, batch));
-      await this.db
-        .delete(Schema.TweetMap)
-        .where(inArray(Schema.TweetMap.tweetId, batch));
+  async rebuild(botId: number): Promise<void> {
+    const bot = this.bots.get(botId);
+    if (bot) {
+      bot.setForceResync();
     }
-    return tweetIds.length;
   }
 
   /**

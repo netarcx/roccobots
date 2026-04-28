@@ -1,6 +1,6 @@
 import { Scraper, Tweet } from "@the-convocation/twitter-scraper";
 import { type DBType, Schema } from "db";
-import { eq, or } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import {
   DEBUG,
   FORCE_SYNC_POSTS,
@@ -45,6 +45,7 @@ export async function syncPosts(args: {
   transformRules?: TransformRulesConfig | null;
   perBotMentionOverrides?: MentionMap | null;
   globalMentionOverrides?: MentionMap | null;
+  forceResync?: boolean;
 }) {
   const {
     db,
@@ -55,6 +56,7 @@ export async function syncPosts(args: {
     transformRules,
     perBotMentionOverrides,
     globalMentionOverrides,
+    forceResync,
   } = args;
   if (!synchronizers.filter((s) => s.syncPost).length) {
     return;
@@ -93,7 +95,7 @@ export async function syncPosts(args: {
         .from(TweetSynced)
         .where(eq(TweetSynced.tweetId, tweet.id))
         .get();
-      if (synced && synced.synced !== 0 && !FORCE_SYNC_POSTS) {
+      if (synced && synced.synced !== 0 && !FORCE_SYNC_POSTS && !forceResync) {
         log.info("skipping synced tweet");
         cachedCounter++;
         log.info(
@@ -178,6 +180,16 @@ export async function syncPosts(args: {
               },
             );
             const storeStr = syncRes ? JSON.stringify(syncRes.store) : "";
+            if (forceResync) {
+              await db
+                .delete(TweetMap)
+                .where(
+                  and(
+                    eq(TweetMap.tweetId, tweet.id),
+                    eq(TweetMap.platform, s.platformId),
+                  ),
+                );
+            }
             await db
               .insert(TweetMap)
               .values({
