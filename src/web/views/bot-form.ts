@@ -146,7 +146,7 @@ export function botFormPage(bot?: BotData): string {
           <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wide mb-4">Per-Bot Mention Overrides</h2>
           <p class="text-sm text-slate-400 mb-4">Override global rewrites for this bot only. Applied when posting to Bluesky. Leave empty to fall back to the global map.</p>
           <div id="bot-mentions-list" class="space-y-2 mb-4"></div>
-          <form onsubmit="addBotMention(event)" class="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-end">
+          <div class="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-end">
             <div>
               <label class="block text-xs text-slate-500 mb-1">Twitter handle</label>
               <input type="text" id="botNewTwitter" placeholder="foo"
@@ -157,8 +157,8 @@ export function botFormPage(bot?: BotData): string {
               <input type="text" id="botNewBluesky" placeholder="foo.bsky.social"
                 class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500">
             </div>
-            <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-2 rounded transition-colors">Add</button>
-          </form>
+            <button type="button" onclick="addBotMention()" class="bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-2 rounded transition-colors">Add</button>
+          </div>
         </div>
 
         <!-- Commands -->
@@ -601,8 +601,7 @@ export function botFormPage(bot?: BotData): string {
         }
       }
 
-      function addBotMention(e) {
-        e.preventDefault();
+      function addBotMention() {
         const twEl = document.getElementById('botNewTwitter');
         const bsEl = document.getElementById('botNewBluesky');
         const tw = twEl.value.trim().replace(/^@/, '').toLowerCase();
