@@ -654,14 +654,15 @@ export function botFormPage(bot?: BotData): string {
               container.innerHTML = '<div class="text-slate-500">No logs yet</div>';
               return;
             }
+            function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
             container.innerHTML = logs.map(log => {
               const time = new Date(log.timestamp).toLocaleTimeString();
               const levelClass = levelColors[log.level] || 'text-slate-400';
-              const platform = log.platform ? '<span class="text-slate-500">[' + log.platform + ']</span> ' : '';
+              const platform = log.platform ? '<span class="text-slate-500">[' + esc(log.platform) + ']</span> ' : '';
               return '<div class="flex gap-2 py-0.5">' +
-                '<span class="text-slate-500 shrink-0">' + time + '</span>' +
-                '<span class="font-medium shrink-0 ' + levelClass + '">' + log.level + '</span>' +
-                '<span class="text-slate-300 truncate">' + platform + log.message + '</span>' +
+                '<span class="text-slate-500 shrink-0">' + esc(time) + '</span>' +
+                '<span class="font-medium shrink-0 ' + levelClass + '">' + esc(log.level) + '</span>' +
+                '<span class="text-slate-300 truncate">' + platform + esc(log.message) + '</span>' +
               '</div>';
             }).join('');
           })

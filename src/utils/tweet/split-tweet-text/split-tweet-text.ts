@@ -69,7 +69,7 @@ export const buildChunksFromSplitterEntries = ({
     if (currentChunkWithAddedWord.length <= currentMaxChunkSize) {
       currentChunk = currentChunkWithAddedWord;
     } else {
-      // Either push the current chunk or push the current chunk with the quote link (if mastodon + initial thread chunk)
+      // Either push the current chunk or push the current chunk with the quote link (if initial thread chunk)
       chunks.push(
         shouldAppendQuoteLink
           ? `${currentChunk.trim()}${quotedStatusLinkSection}`

@@ -3,7 +3,6 @@ import { db } from "db";
 import ora from "ora";
 import { BlueskySynchronizerFactory } from "sync/platforms/bluesky";
 import { DiscordWebhookSynchronizerFactory } from "sync/platforms/discord-webhook/webhook-sync";
-import { MastodonSynchronizerFactory } from "sync/platforms/mastodon/mastodon-sync";
 import { MisskeySynchronizerFactory } from "sync/platforms/misskey/missky-sync";
 import { syncPosts } from "sync/sync-posts";
 import { syncProfile } from "sync/sync-profile";
@@ -47,6 +46,7 @@ process.on("SIGINT", () => {
 
 process.on("SIGTERM", () => {
   console.log("Received SIGTERM. Exiting...");
+  if (interval) clearInterval(interval);
   try {
     cycleTLSExit();
   } catch {}
@@ -80,7 +80,6 @@ console.log(`\n
 
 const factories = [
   BlueskySynchronizerFactory,
-  MastodonSynchronizerFactory,
   MisskeySynchronizerFactory,
   DiscordWebhookSynchronizerFactory,
 ] as const;

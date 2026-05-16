@@ -8,16 +8,27 @@ export function syncProfile(args: {
   agent: Agent;
 }): Synchronizer<typeof BlueskyPlatformStore> {
   const { agent } = args;
+
+  let profileLock = Promise.resolve();
+  function serialUpsertProfile(
+    fn: Parameters<typeof agent.upsertProfile>[0],
+  ): Promise<void> {
+    const prev = profileLock;
+    let resolve: () => void;
+    profileLock = new Promise<void>((r) => (resolve = r));
+    return prev.then(() => agent.upsertProfile(fn)).finally(() => resolve!());
+  }
+
   return {
     syncBio: async (args) => {
-      await agent.upsertProfile((o) => ({
+      await serialUpsertProfile((o) => ({
         ...o,
         description: args.formattedBio,
       }));
     },
 
     syncUserName: async (args) => {
-      await agent.upsertProfile((o) => ({
+      await serialUpsertProfile((o) => ({
         ...o,
         displayName: args.name,
       }));
@@ -28,7 +39,7 @@ export function syncProfile(args: {
       if (!avatar) {
         throw new Error("Failed to upload avatar");
       }
-      await agent.upsertProfile((o) => ({
+      await serialUpsertProfile((o) => ({
         ...o,
         avatar: avatar.data.blob,
       }));
@@ -39,7 +50,7 @@ export function syncProfile(args: {
       if (!res) {
         throw new Error("Unable to upload banner");
       }
-      await agent.upsertProfile((o) => ({
+      await serialUpsertProfile((o) => ({
         ...o,
         banner: res?.data.blob,
       }));

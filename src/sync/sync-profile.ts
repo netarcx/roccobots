@@ -49,7 +49,7 @@ async function upsertProfileCache(args: {
 
   const cPfpUrl = row?.pfpUrl ?? "";
   const cPfpHash = row?.pfpHash ?? "";
-  let pfpHash = "";
+  let pfpHash = cPfpHash;
   let pfpBlob: File | undefined = undefined;
 
   if (cPfpUrl !== pfpUrl) {
@@ -68,7 +68,7 @@ async function upsertProfileCache(args: {
   let bannerChanged = false;
   const cBannerUrl = row?.bannerUrl ?? "";
   const cBannerHash = row?.bannerHash ?? "";
-  let bannerHash = "";
+  let bannerHash = cBannerHash;
   let bannerBlob: File | undefined = undefined;
 
   if (cBannerUrl !== bannerUrl) {

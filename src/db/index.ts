@@ -10,6 +10,7 @@ const sqlite = new Database(DATABASE_PATH, {
   create: true,
   strict: true,
 });
+sqlite.exec("PRAGMA foreign_keys = ON;");
 export type DBType = BunSQLiteDatabase<typeof Schema>;
 
 export const db: DBType = await migrate(

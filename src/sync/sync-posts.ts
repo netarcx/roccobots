@@ -108,6 +108,7 @@ export async function syncPosts(args: {
 
       const metaTweet = toMetaPost(tweet);
       try {
+        let anyPlatformFailed = false;
         for (const s of args.synchronizers) {
           // Might have race condition if done in parallel
           if (!s.syncPost) continue;
@@ -206,6 +207,7 @@ export async function syncPosts(args: {
               tweet.id,
             );
           } catch (e) {
+            anyPlatformFailed = true;
             logError(
               platformLog,
               e,
@@ -220,15 +222,16 @@ export async function syncPosts(args: {
           }
           platformLog.stop();
         }
-        // Mark as synced
-        await db
-          .insert(TweetSynced)
-          .values({ tweetId: tweet.id, synced: 1 })
-          .onConflictDoUpdate({
-            target: TweetSynced.tweetId,
-            set: { synced: 1 },
-          })
-          .run();
+        if (!anyPlatformFailed) {
+          await db
+            .insert(TweetSynced)
+            .values({ tweetId: tweet.id, synced: 1 })
+            .onConflictDoUpdate({
+              target: TweetSynced.tweetId,
+              set: { synced: 1 },
+            })
+            .run();
+        }
         newPostCount++;
       } catch (e) {
         logError(log, e)`Failed to sync tweet: ${e}`;

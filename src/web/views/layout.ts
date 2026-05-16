@@ -1,3 +1,11 @@
+export function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 export interface LayoutOptions {
   title: string;
   content: string;
@@ -42,8 +50,15 @@ function toastContainer(): string {
         toast.className = (colors[type] || colors.info) +
           ' pointer-events-auto border rounded-lg px-4 py-3 text-white text-sm shadow-lg ' +
           'transform transition-all duration-300 translate-x-[120%] opacity-0 max-w-sm flex items-center gap-2';
-        toast.innerHTML = '<span class="flex-1">' + message + '</span>' +
-          '<button onclick="this.parentElement.remove()" class="text-white/70 hover:text-white text-lg leading-none">&times;</button>';
+        const span = document.createElement('span');
+        span.className = 'flex-1';
+        span.textContent = message;
+        const btn = document.createElement('button');
+        btn.className = 'text-white/70 hover:text-white text-lg leading-none';
+        btn.innerHTML = '&times;';
+        btn.onclick = function() { toast.remove(); };
+        toast.appendChild(span);
+        toast.appendChild(btn);
         container.appendChild(toast);
         requestAnimationFrame(() => {
           toast.classList.remove('translate-x-[120%]', 'opacity-0');

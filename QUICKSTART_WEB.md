@@ -64,7 +64,7 @@ If you already have a `.env` file with bot configurations:
    - **Twitter Password**: Your Twitter password
    - **Sync Frequency**: How often to sync (in minutes)
 3. Click **"Create Bot"**
-4. Add platforms (Bluesky, Mastodon, etc.) by editing the bot
+4. Add platforms (Bluesky, Misskey, etc.) by editing the bot
 5. Click **"Start"** to begin syncing
 
 ## Step 6: Add Platform Credentials
@@ -78,12 +78,6 @@ After creating a bot, you need to add at least one platform:
 4. Enter:
    - `BLUESKY_IDENTIFIER`: Your Bluesky handle (e.g., `example.bsky.social`)
    - `BLUESKY_PASSWORD`: Your Bluesky password or app password
-
-### Mastodon
-1. Select "Mastodon"
-2. Enter:
-   - `MASTODON_INSTANCE`: Your instance URL (e.g., `mastodon.social`)
-   - `MASTODON_TOKEN`: Your access token
 
 ### Misskey
 1. Select "Misskey"

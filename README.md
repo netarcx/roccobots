@@ -7,7 +7,6 @@ An easy way to synchronize posts from 𝕏 (Twitter) to other social media platf
 | Platform | Notes |
 |----------|-------|
 | ☁️ [Bluesky](https://bsky.app/) | Full support: posts, threads, media, quotes, replies, profile sync |
-| 🦣 [Mastodon](https://joinmastodon.org/) | Full support: posts, threads, media, profile sync |
 | Ⓜ️ [Misskey](https://misskey-hub.net/) | Posts with media |
 | 🇩 [Discord](https://discord.com/) | Webhook embeds with engagement stats |
 
@@ -224,10 +223,6 @@ BLUESKY_INSTANCE=bsky.social          # default: bsky.social
 BLUESKY_IDENTIFIER=your-handle.bsky.social
 BLUESKY_PASSWORD=xxxx-xxxx-xxxx-xxxx  # use an app password
 
-# --- 🦣 Mastodon (optional) ---
-MASTODON_INSTANCE=https://mastodon.social
-MASTODON_ACCESS_TOKEN=YourMastodonAccessToken
-
 # --- Ⓜ️ Misskey (optional) ---
 MISSKEY_INSTANCE=https://misskey.io
 MISSKEY_ACCESS_CODE=YourMisskeyApiToken
@@ -249,7 +244,8 @@ DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/111111111/xxxxxxxxxx
 
 # ======= ACCOUNT 1 =======
 TWITTER_HANDLE1=SecondXHandle
-MASTODON_ACCESS_TOKEN1=yyyyyyyyyyyyyyyyyy   # defaults to mastodon.social
+MISSKEY_INSTANCE1=https://misskey.io
+MISSKEY_ACCESS_CODE1=yyyyyyyyyyyyyyyyyy
 
 # ======= ACCOUNT 2 =======
 TWITTER_HANDLE2=ThirdXHandle

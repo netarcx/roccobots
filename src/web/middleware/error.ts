@@ -23,7 +23,7 @@ export async function errorHandler(c: Context, next: Next) {
     if (error instanceof Error) {
       return c.json(
         {
-          error: error.message,
+          error: "Internal server error",
           status: 500,
         },
         500,

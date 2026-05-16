@@ -2,7 +2,11 @@ import { DBType } from "db";
 import { Hono } from "hono";
 import { serveStatic } from "hono/bun";
 
-import { requireAuth, sessionMiddleware } from "./middleware/auth";
+import {
+  requireAuth,
+  requireAuthPage,
+  sessionMiddleware,
+} from "./middleware/auth";
 import { errorHandler } from "./middleware/error";
 import analyticsRouter from "./routes/api/analytics";
 import authRouter from "./routes/api/auth";
@@ -94,11 +98,11 @@ export function createServer(options: ServerOptions) {
     return c.html(dashboardPage());
   });
 
-  app.get("/bots/new", requireAuth, async (_c) => {
+  app.get("/bots/new", requireAuthPage, async (_c) => {
     return _c.html(botFormPage());
   });
 
-  app.get("/bots/:id", requireAuth, async (c) => {
+  app.get("/bots/:id", requireAuthPage, async (c) => {
     const id = parseInt(c.req.param("id"));
     if (isNaN(id)) return c.redirect("/");
 
@@ -111,11 +115,11 @@ export function createServer(options: ServerOptions) {
     }
   });
 
-  app.get("/analytics", requireAuth, async (_c) => {
+  app.get("/analytics", requireAuthPage, async (_c) => {
     return _c.html(analyticsPage());
   });
 
-  app.get("/settings", requireAuth, async (_c) => {
+  app.get("/settings", requireAuthPage, async (_c) => {
     const auth = await configService.getTwitterAuth();
     return _c.html(
       settingsPage({
@@ -125,7 +129,7 @@ export function createServer(options: ServerOptions) {
     );
   });
 
-  app.get("/bots/:id/logs", requireAuth, async (c) => {
+  app.get("/bots/:id/logs", requireAuthPage, async (c) => {
     const id = parseInt(c.req.param("id"));
     if (isNaN(id)) return c.redirect("/");
 

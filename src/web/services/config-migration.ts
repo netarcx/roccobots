@@ -17,9 +17,6 @@ export interface EnvConfig {
   // Bluesky
   BLUESKY_IDENTIFIER?: string;
   BLUESKY_PASSWORD?: string;
-  // Mastodon
-  MASTODON_INSTANCE?: string;
-  MASTODON_TOKEN?: string;
   // Misskey
   MISSKEY_INSTANCE?: string;
   MISSKEY_TOKEN?: string;
@@ -154,29 +151,6 @@ export async function importFromEnv(
           } catch (error) {
             errors.push(
               `Failed to add Bluesky platform for ${handle}: ${(error as Error).message}`,
-            );
-          }
-        }
-
-        // Add Mastodon platform if configured
-        const mastodonInstance =
-          env[`MASTODON_INSTANCE${postfix}`] || env.MASTODON_INSTANCE;
-        const mastodonToken =
-          env[`MASTODON_TOKEN${postfix}`] || env.MASTODON_TOKEN;
-
-        if (mastodonInstance && mastodonToken) {
-          try {
-            await configService.createPlatformConfig({
-              botConfigId: botConfig.id,
-              platformId: "mastodon",
-              credentials: {
-                MASTODON_INSTANCE: mastodonInstance,
-                MASTODON_ACCESS_TOKEN: mastodonToken,
-              },
-            });
-          } catch (error) {
-            errors.push(
-              `Failed to add Mastodon platform for ${handle}: ${(error as Error).message}`,
             );
           }
         }

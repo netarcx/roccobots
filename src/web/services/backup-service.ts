@@ -19,6 +19,8 @@ const BotBackupSchema = z.object({
   syncProfileName: z.boolean(),
   syncProfileHeader: z.boolean(),
   backdateBlueskyPosts: z.boolean(),
+  analyticsEnabled: z.boolean().optional(),
+  adaptivePolling: z.boolean().optional(),
   platforms: z.array(PlatformBackupSchema),
 });
 
@@ -80,6 +82,8 @@ export async function exportBackup(
       syncProfileName: bot.syncProfileName,
       syncProfileHeader: bot.syncProfileHeader,
       backdateBlueskyPosts: bot.backdateBlueskyPosts,
+      analyticsEnabled: bot.analyticsEnabled,
+      adaptivePolling: bot.adaptivePolling,
       platforms: bot.platforms.map((p) => ({
         platformId: p.platformId,
         enabled: p.enabled,
@@ -154,6 +158,8 @@ export async function importBackup(
         syncProfileName: bot.syncProfileName,
         syncProfileHeader: bot.syncProfileHeader,
         backdateBlueskyPosts: bot.backdateBlueskyPosts,
+        analyticsEnabled: bot.analyticsEnabled,
+        adaptivePolling: bot.adaptivePolling,
       });
       result.botsCreated++;
 

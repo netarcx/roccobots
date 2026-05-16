@@ -38,25 +38,6 @@ export const PLATFORM_DEFS: Record<string, PlatformDefinition> = {
       },
     ],
   },
-  mastodon: {
-    displayName: "Mastodon",
-    color: "purple",
-    fields: [
-      {
-        key: "MASTODON_INSTANCE",
-        label: "Instance",
-        type: "text",
-        placeholder: "mastodon.social",
-        defaultValue: "mastodon.social",
-      },
-      {
-        key: "MASTODON_ACCESS_TOKEN",
-        label: "Access Token",
-        type: "password",
-        placeholder: "Your access token",
-      },
-    ],
-  },
   misskey: {
     displayName: "Misskey",
     color: "green",
@@ -104,13 +85,11 @@ export function renderPlatformForm(
 
   const colorMap: Record<string, string> = {
     blue: "border-blue-500/30 bg-blue-500/5",
-    purple: "border-purple-500/30 bg-purple-500/5",
     green: "border-green-500/30 bg-green-500/5",
     indigo: "border-indigo-500/30 bg-indigo-500/5",
   };
   const badgeMap: Record<string, string> = {
     blue: "bg-blue-500/20 text-blue-400",
-    purple: "bg-purple-500/20 text-purple-400",
     green: "bg-green-500/20 text-green-400",
     indigo: "bg-indigo-500/20 text-indigo-400",
   };

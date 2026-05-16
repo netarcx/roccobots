@@ -292,8 +292,11 @@ botsRouter.post("/stop-all", async (c) => {
 botsRouter.get("/:id/logs", async (c) => {
   const configService = c.get("configService");
   const id = parseInt(c.req.param("id"));
-  const limit = parseInt(c.req.query("limit") || "100");
-  const offset = parseInt(c.req.query("offset") || "0");
+  const limit = Math.min(
+    Math.max(parseInt(c.req.query("limit") || "100") || 100, 1),
+    500,
+  );
+  const offset = Math.max(parseInt(c.req.query("offset") || "0") || 0, 0);
 
   if (isNaN(id)) {
     return c.json({ error: "Invalid bot ID" }, 400);

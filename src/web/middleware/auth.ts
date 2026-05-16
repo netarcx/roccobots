@@ -1,8 +1,7 @@
-import { createHash, randomBytes } from "crypto";
+import { createHash, randomBytes, timingSafeEqual } from "crypto";
 import { Context, Next } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 
-// Session storage (in-memory for now, can be moved to DB later)
 const sessions = new Map<
   string,
   {
@@ -12,55 +11,10 @@ const sessions = new Map<
   }
 >();
 
-/**
- * Generate a secure session ID
- */
 function generateSessionId(): string {
   return randomBytes(32).toString("hex");
 }
 
-/**
- * Hash password for comparison
- */
-function hashPassword(password: string): string {
-  return createHash("sha256").update(password).digest("hex");
-}
-
-/**
- * Get or create session
- */
-function getOrCreateSession(sessionId?: string): {
-  sessionId: string;
-  session: { authenticated: boolean; createdAt: Date; expiresAt: Date };
-} {
-  if (sessionId && sessions.has(sessionId)) {
-    const session = sessions.get(sessionId)!;
-    // Check if session is expired
-    if (session.expiresAt > new Date()) {
-      return { sessionId, session };
-    } else {
-      sessions.delete(sessionId);
-    }
-  }
-
-  // Create new session
-  const newSessionId = generateSessionId();
-  const expiresAt = new Date();
-  expiresAt.setHours(expiresAt.getHours() + 24); // 24 hour sessions
-
-  const newSession = {
-    authenticated: false,
-    createdAt: new Date(),
-    expiresAt,
-  };
-
-  sessions.set(newSessionId, newSession);
-  return { sessionId: newSessionId, session: newSession };
-}
-
-/**
- * Middleware to check if user is authenticated
- */
 export async function requireAuth(c: Context, next: Next) {
   const sessionId = getCookie(c, "session_id");
 
@@ -74,37 +28,45 @@ export async function requireAuth(c: Context, next: Next) {
     return c.json({ error: "Unauthorized" }, 401);
   }
 
-  // Extend session
   session.expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
   await next();
 }
 
-/**
- * Middleware to attach session to context
- */
-export async function sessionMiddleware(c: Context, next: Next) {
+export async function requireAuthPage(c: Context, next: Next) {
   const sessionId = getCookie(c, "session_id");
-  const { sessionId: newSessionId, session } = getOrCreateSession(sessionId);
 
-  if (!sessionId || sessionId !== newSessionId) {
-    setCookie(c, "session_id", newSessionId, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "Strict",
-      maxAge: 24 * 60 * 60, // 24 hours
-    });
+  if (!sessionId || !sessions.has(sessionId)) {
+    return c.redirect("/login");
   }
 
-  c.set("session", session);
-  c.set("sessionId", newSessionId);
+  const session = sessions.get(sessionId)!;
+
+  if (!session.authenticated || session.expiresAt < new Date()) {
+    return c.redirect("/login");
+  }
+
+  session.expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
   await next();
 }
 
-/**
- * Login handler
- */
+export async function sessionMiddleware(c: Context, next: Next) {
+  const sessionId = getCookie(c, "session_id");
+
+  if (sessionId && sessions.has(sessionId)) {
+    const session = sessions.get(sessionId)!;
+    if (session.expiresAt > new Date()) {
+      c.set("session", session);
+      c.set("sessionId", sessionId);
+    } else {
+      sessions.delete(sessionId);
+    }
+  }
+
+  await next();
+}
+
 export function login(c: Context, password: string): boolean {
   const adminPassword = process.env.WEB_ADMIN_PASSWORD;
 
@@ -112,15 +74,28 @@ export function login(c: Context, password: string): boolean {
     throw new Error("WEB_ADMIN_PASSWORD environment variable not set");
   }
 
-  if (password === adminPassword) {
-    const sessionId = c.get("sessionId") as string;
-    const session = sessions.get(sessionId);
+  const passwordHash = createHash("sha256").update(password).digest();
+  const adminHash = createHash("sha256").update(adminPassword).digest();
 
-    if (session) {
-      session.authenticated = true;
-      session.expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    }
+  if (timingSafeEqual(passwordHash, adminHash)) {
+    const newSessionId = generateSessionId();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const session = {
+      authenticated: true,
+      createdAt: new Date(),
+      expiresAt,
+    };
+    sessions.set(newSessionId, session);
 
+    setCookie(c, "session_id", newSessionId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "Strict",
+      maxAge: 24 * 60 * 60,
+    });
+
+    c.set("session", session);
+    c.set("sessionId", newSessionId);
     return true;
   }
 

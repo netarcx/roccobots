@@ -1,6 +1,6 @@
 # RoccoBots Web Interface
 
-A web-based dashboard for managing Twitter to Bluesky/Mastodon/Misskey/Discord bots.
+A web-based dashboard for managing Twitter to Bluesky/Misskey/Discord bots.
 
 ## Features
 
@@ -84,7 +84,7 @@ This starts the web interface on port 3000 (or `WEB_PORT`).
 The web interface adds new tables to the SQLite database:
 
 - **bot_configs**: Bot Twitter credentials and sync settings
-- **platform_configs**: Platform-specific credentials (Bluesky, Mastodon, etc.)
+- **platform_configs**: Platform-specific credentials (Bluesky, Misskey, etc.)
 - **sync_logs**: Historical sync logs
 - **bot_status**: Current runtime status of each bot
 - **web_sessions**: Web session storage
@@ -156,7 +156,7 @@ The web interface adds new tables to the SQLite database:
    - Sync frequency in minutes
    - Sync options (posts, profile, etc.)
 4. Click "Create Bot"
-5. Add platforms (Bluesky, Mastodon, etc.)
+5. Add platforms (Bluesky, Misskey, etc.)
 
 ### Adding Platforms
 
@@ -167,7 +167,6 @@ After creating a bot:
 3. Select platform type
 4. Enter credentials:
    - **Bluesky**: BLUESKY_IDENTIFIER, BLUESKY_PASSWORD
-   - **Mastodon**: MASTODON_INSTANCE, MASTODON_TOKEN
    - **Misskey**: MISSKEY_INSTANCE, MISSKEY_TOKEN
    - **Discord**: DISCORD_WEBHOOK
 

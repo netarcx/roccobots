@@ -84,6 +84,11 @@ export class BotManager extends EventEmitter {
     }
   }
 
+  resetXClient(): void {
+    this.xClient = null;
+    this.xClientPromise = null;
+  }
+
   /**
    * Load bot configuration from database
    */

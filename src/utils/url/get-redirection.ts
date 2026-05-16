@@ -29,7 +29,9 @@ function extractMetaRefreshUrl(html: string, baseUrl: string): string | null {
 export const getRedirectedUrl = async (
   url: string,
   hasRedirected: boolean = false,
+  depth: number = 0,
 ): Promise<string | null> => {
+  if (depth >= 10) return hasRedirected ? url : null;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
@@ -44,7 +46,7 @@ export const getRedirectedUrl = async (
       const redirectUrl = response.headers.get("location");
       if (redirectUrl) {
         const resolvedUrl = new URL(redirectUrl, url).href;
-        return getRedirectedUrl(resolvedUrl, true); // Recursively resolve further redirects
+        return getRedirectedUrl(resolvedUrl, true, depth + 1);
       }
     }
 
@@ -54,7 +56,7 @@ export const getRedirectedUrl = async (
       const html = await response.text();
       const metaRedirectUrl = extractMetaRefreshUrl(html, url);
       if (metaRedirectUrl) {
-        return getRedirectedUrl(metaRedirectUrl, true); // Recursively resolve meta tag redirects
+        return getRedirectedUrl(metaRedirectUrl, true, depth + 1);
       }
     }
 

@@ -36,7 +36,11 @@ export async function getPostStore<S extends z.ZodObject = z.ZodObject>(args: {
   tweet?: Tweet | string;
   platformId: string;
 }) {
-  const str = await getPostStoreStr({ ...args });
-  const p = args.s.safeParse(str);
-  return p;
+  const row = await getPostStoreStr({ ...args });
+  if (!row?.platformStore) return args.s.safeParse(undefined);
+  try {
+    return args.s.safeParse(JSON.parse(row.platformStore));
+  } catch {
+    return args.s.safeParse(undefined);
+  }
 }

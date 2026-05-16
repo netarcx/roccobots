@@ -48,8 +48,12 @@ export const oraProgress = (
 ) => {
   const textBefore = text.before ?? " ";
   const textAfter = text.after ?? " ";
-  const progress = Math.round((index / maximum) * 100);
-  const segments = Math.round(progress / 5);
+  if (maximum <= 0) {
+    ora.text = `${textBefore} ... ${textAfter}`;
+    return;
+  }
+  const progress = Math.min(100, Math.round((index / maximum) * 100));
+  const segments = Math.min(20, Math.round(progress / 5));
   const bar = `${SEGMENT_DONE.repeat(segments)}${SEGMENT_UNDONE.repeat(
     20 - segments,
   )}`;

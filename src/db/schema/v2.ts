@@ -61,7 +61,7 @@ export const PlatformConfigs = sqliteTable(
     botConfigId: integer("bot_config_id")
       .notNull()
       .references(() => BotConfigs.id, { onDelete: "cascade" }),
-    platformId: text("platform_id").notNull(), // "bluesky", "mastodon", "misskey", "discord"
+    platformId: text("platform_id").notNull(), // "bluesky", "misskey", "discord"
     enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
     credentials: text("credentials").notNull(), // JSON encrypted
     createdAt: integer("created_at", { mode: "timestamp" })

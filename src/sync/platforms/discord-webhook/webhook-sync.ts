@@ -141,13 +141,19 @@ export const DiscordWebhookSynchronizerFactory: SynchronizerFactory<
   STORE_SCHEMA: WebhookStoreSchema,
   async create(args) {
     const webhookUrl = args.env["DISCORD_WEBHOOK_URL"];
-    async function sendWebhook(payload: RESTPostAPIWebhookWithTokenJSONBody) {
+    async function sendWebhook(
+      payload: RESTPostAPIWebhookWithTokenJSONBody,
+      retries = 0,
+    ) {
       const res = await fetch(webhookUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
       if (res.status === 429) {
+        if (retries >= 5) {
+          throw new Error("Discord rate limit: max retries exceeded");
+        }
         const data = await res.json().catch(() => ({}));
         const retryAfter = data.retry_after
           ? Number(data.retry_after) * 1000
@@ -157,7 +163,7 @@ export const DiscordWebhookSynchronizerFactory: SynchronizerFactory<
         );
 
         await new Promise((resolve) => setTimeout(resolve, retryAfter));
-        return sendWebhook(payload); // retry
+        return sendWebhook(payload, retries + 1);
       }
 
       if (!res.ok) {

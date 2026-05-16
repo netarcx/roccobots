@@ -1,14 +1,15 @@
-import { layout } from "./layout";
+import { escapeHtml, layout } from "./layout";
 
 export function logsPage(botId: number, twitterHandle: string): string {
+  const safeHandle = escapeHtml(twitterHandle);
   return layout({
-    title: `Logs - @${twitterHandle}`,
+    title: `Logs - @${safeHandle}`,
     authenticated: true,
     content: `
     <div class="max-w-4xl mx-auto">
       <div class="flex items-center gap-3 mb-6">
         <a href="/bots/${botId}" class="text-slate-400 hover:text-slate-200 transition-colors">&larr;</a>
-        <h1 class="text-xl font-bold text-slate-100">Logs for @${twitterHandle}</h1>
+        <h1 class="text-xl font-bold text-slate-100">Logs for @${safeHandle}</h1>
       </div>
 
       <!-- Filters -->
@@ -58,17 +59,23 @@ export function logsPage(botId: number, twitterHandle: string): string {
         success: 'bg-emerald-500/10',
       };
 
+      function esc(s) {
+        const d = document.createElement('div');
+        d.textContent = s || '';
+        return d.innerHTML;
+      }
+
       function renderLog(log) {
         const time = new Date(log.timestamp).toLocaleString();
         const levelClass = levelColors[log.level] || 'text-slate-400';
         const bgClass = levelBg[log.level] || '';
         const platform = log.platform
-          ? '<span class="text-slate-500">[' + log.platform + ']</span> '
+          ? '<span class="text-slate-500">[' + esc(log.platform) + ']</span> '
           : '';
-        return '<div class="flex gap-3 py-1 px-2 rounded ' + bgClass + ' log-entry" data-level="' + log.level + '">' +
-          '<span class="text-slate-500 shrink-0 w-40">' + time + '</span>' +
-          '<span class="font-semibold shrink-0 w-14 ' + levelClass + '">' + log.level.toUpperCase() + '</span>' +
-          '<span class="text-slate-300 break-all">' + platform + log.message + '</span>' +
+        return '<div class="flex gap-3 py-1 px-2 rounded ' + bgClass + ' log-entry" data-level="' + esc(log.level) + '">' +
+          '<span class="text-slate-500 shrink-0 w-40">' + esc(time) + '</span>' +
+          '<span class="font-semibold shrink-0 w-14 ' + levelClass + '">' + esc(log.level.toUpperCase()) + '</span>' +
+          '<span class="text-slate-300 break-all">' + platform + esc(log.message) + '</span>' +
         '</div>';
       }
 
@@ -145,7 +152,10 @@ export function logsPage(botId: number, twitterHandle: string): string {
       });
       eventSource.onerror = () => {
         eventSource.close();
-        setTimeout(() => location.reload(), 10000);
+        fetch('/api/auth/status').then(r => r.json()).then(d => {
+          if (!d.authenticated) window.location = '/login';
+          else setTimeout(() => location.reload(), 10000);
+        }).catch(() => setTimeout(() => location.reload(), 10000));
       };
 
       loadLogs();

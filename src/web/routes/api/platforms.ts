@@ -15,7 +15,7 @@ platformsRouter.use("*", requireAuth);
 
 // Schemas
 const createPlatformSchema = z.object({
-  platformId: z.enum(["bluesky", "mastodon", "misskey", "discord"]),
+  platformId: z.enum(["bluesky", "misskey", "discord"]),
   enabled: z.boolean().optional(),
   credentials: z.record(z.string(), z.string()),
 });

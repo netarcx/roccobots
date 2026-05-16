@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-RoccoBots is a TypeScript application that synchronizes posts from X (Twitter) to Bluesky, Mastodon, Misskey, and Discord (webhooks). It runs on Bun and has two operating modes: CLI daemon and web dashboard.
+RoccoBots is a TypeScript application that synchronizes posts from X (Twitter) to Bluesky, Misskey, and Discord (webhooks). It runs on Bun and has two operating modes: CLI daemon and web dashboard.
 
 ## Commands
 
@@ -40,7 +40,6 @@ There is no test suite in this project.
 
 Each platform implements `SynchronizerFactory<KEYS, SCHEMA>` (defined in `src/sync/synchronizer.ts`). Factories are in `src/sync/platforms/`:
 - `bluesky/` — `@atproto/api`
-- `mastodon/` — `masto` library
 - `misskey/` — `misskey-js`
 - `discord-webhook/` — Discord webhook API
 

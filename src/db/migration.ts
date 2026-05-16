@@ -3,6 +3,7 @@ import {
   generateSQLiteDrizzleJson,
   generateSQLiteMigration,
 } from "drizzle-kit/api";
+import { sql } from "drizzle-orm";
 import { BunSQLiteDatabase } from "drizzle-orm/bun-sqlite";
 
 import * as v1 from "./schema/v1";
@@ -119,9 +120,9 @@ export async function migrate(
         firstBot[0].twitter_username &&
         firstBot[0].twitter_password
       ) {
-        const now = Date.now();
+        const now = Math.floor(Date.now() / 1000);
         db.run(
-          `INSERT INTO twitter_auth (id, username, password, created_at, updated_at) VALUES (1, '${firstBot[0].twitter_username}', '${firstBot[0].twitter_password}', ${now}, ${now})`,
+          sql`INSERT INTO twitter_auth (id, username, password, created_at, updated_at) VALUES (1, ${firstBot[0].twitter_username}, ${firstBot[0].twitter_password}, ${now}, ${now})`,
         );
         console.log("✅ Backfilled twitter_auth from first bot's credentials");
       }

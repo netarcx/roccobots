@@ -63,7 +63,6 @@ export function dashboardPage(): string {
 
       const platformColors = {
         bluesky: 'bg-blue-500/20 text-blue-400',
-        mastodon: 'bg-purple-500/20 text-purple-400',
         misskey: 'bg-green-500/20 text-green-400',
         discord: 'bg-indigo-500/20 text-indigo-400',
       };
@@ -244,7 +243,10 @@ export function dashboardPage(): string {
         eventSource.addEventListener('botStopped', () => loadBots());
         eventSource.onerror = () => {
           eventSource.close();
-          setTimeout(connectSSE, 10000);
+          fetch('/api/auth/status').then(r => r.json()).then(d => {
+            if (!d.authenticated) window.location = '/login';
+            else setTimeout(connectSSE, 10000);
+          }).catch(() => setTimeout(connectSSE, 10000));
         };
       }
 

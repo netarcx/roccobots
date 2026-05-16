@@ -12,6 +12,7 @@ async function getSharp(): Promise<typeof sharp> {
 const findSmallerBuffer = (
   compressedBuffers: CompressedBuffer[],
 ): CompressedBuffer | undefined => {
+  if (compressedBuffers.length === 0) return undefined;
   return compressedBuffers.reduce((smaller, current) =>
     current.buffer.length < smaller.buffer.length ? current : smaller,
   );
@@ -62,8 +63,13 @@ export const compressMedia = async (
   const sizeDecreaseStep = 5;
   const resizeRatio = 0.95; // You can adjust this ratio as needed
 
-  // Loop until the image size is below the target size
-  while (compressedBuffer.buffer.length > targetSizeInBytes && quality > 60) {
+  let iterations = 0;
+  while (
+    compressedBuffer.buffer.length > targetSizeInBytes &&
+    quality > 60 &&
+    iterations < 50
+  ) {
+    iterations++;
     // Test quality for each format
     const formats = [sharpLib.format.jpeg, sharpLib.format.png]; // Use sharp.format instead of format
 
@@ -97,11 +103,11 @@ export const compressMedia = async (
         }
       });
 
-    // If quality is too low, resize the image and restart
     if (quality <= 65) {
       quality = 100;
       width = Math.ceil(width * resizeRatio);
       height = Math.ceil(height * resizeRatio);
+      if (width <= 1 && height <= 1) break;
     } else {
       quality -= sizeDecreaseStep;
     }

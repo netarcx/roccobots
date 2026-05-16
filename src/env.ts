@@ -55,13 +55,11 @@ export const DATABASE_PATH = (
 ).trim();
 // export const CACHE_PATH = `${STORAGE_DIR}/cache.${INSTANCE_ID}.json`;
 // export const COOKIES_PATH = `${STORAGE_DIR}/cookies.v6.${TWITTER_USERNAME}.json`;
-export const SYNC_MASTODON = (process.env.SYNC_MASTODON ?? "true") === "true";
 export const SYNC_BLUESKY = (process.env.SYNC_BLUESKY ?? "true") === "true";
 export const BACKDATE_BLUESKY_POSTS =
   (process.env.BACKDATE_BLUESKY_POSTS ?? "true") === "true";
-export const SYNC_FREQUENCY_MIN = parseInt(
-  process.env.SYNC_FREQUENCY_MIN ?? "30",
-);
+export const SYNC_FREQUENCY_MIN =
+  parseInt(process.env.SYNC_FREQUENCY_MIN ?? "30") || 30;
 export const SYNC_PROFILE_DESCRIPTION =
   (process.env.SYNC_PROFILE_DESCRIPTION ?? "true") === "true";
 export const SYNC_PROFILE_PICTURE =
@@ -74,25 +72,26 @@ export const SYNC_DRY_RUN = (process.env.SYNC_DRY_RUN ?? "false") === "true";
 export const DEBUG = (process.env.TOUITOMAMOUT_DEBUG ?? "false") === "true";
 export const DAEMON = (process.env.DAEMON ?? "true") === "true";
 export const VOID = "∅";
-export const API_RATE_LIMIT = parseInt(process.env.API_RATE_LIMIT ?? "30");
+export const API_RATE_LIMIT =
+  parseInt(process.env.API_RATE_LIMIT ?? "30") || 30;
 export const TOUITOMAMOUT_VERSION = packageInfo.version ?? "0.0.0";
-export const MASTODON_MAX_POST_LENGTH = 500;
 export const BLUESKY_MAX_POST_LENGTH = 300;
 export const BLUESKY_MEDIA_MAX_SIZE_BYTES = 976560;
 // Bluesky's dedicated video.bsky.app endpoint accepts up to ~100MB per video.
 // Anything larger is skipped (post goes through as text-only) rather than
 // burning time on a doomed upload. Configurable via BLUESKY_VIDEO_MAX_SIZE_MB.
 export const BLUESKY_VIDEO_MAX_SIZE_BYTES =
-  parseInt(process.env.BLUESKY_VIDEO_MAX_SIZE_MB ?? "100") * 1024 * 1024;
+  (parseInt(process.env.BLUESKY_VIDEO_MAX_SIZE_MB ?? "100") || 100) *
+  1024 *
+  1024;
 export const MAX_CONSECUTIVE_CACHED = 5;
 export const FORCE_SYNC_POSTS =
   (process.env.FORCE_SYNC_POSTS ?? "false") === "true";
 
 export const SYNC_POSTS = (process.env.SYNC_POSTS ?? "true") === "true";
 
-export const LOG_RETENTION_DAYS = parseInt(
-  process.env.LOG_RETENTION_DAYS ?? "30",
-);
+export const LOG_RETENTION_DAYS =
+  parseInt(process.env.LOG_RETENTION_DAYS ?? "30") || 30;
 
 export const APPRISE_URL = (process.env.APPRISE_URL ?? "").trim();
 export const APPRISE_URLS = (process.env.APPRISE_URLS ?? "").trim();
