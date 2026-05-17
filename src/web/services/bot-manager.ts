@@ -1,13 +1,22 @@
+import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+
 import { Scraper as XClient } from "@the-convocation/twitter-scraper";
 import { DBType, Schema } from "db";
 import { and, count, countDistinct, desc, eq, lt } from "drizzle-orm";
-import { LOG_RETENTION_DAYS } from "env";
+import {
+  DATABASE_PATH,
+  DB_SIZE_WARN_MB,
+  LOG_RETENTION_DAYS,
+  TWITTER_SESSION_REFRESH_HOURS,
+} from "env";
 import { EventEmitter } from "events";
 import { BotConfig, BotInstance, BotInstanceStatus } from "sync/bot-instance";
 import { CommandPoller } from "sync/commands/command-poller";
 import { CommandExecutor, SettingKey } from "sync/commands/command-types";
 import { TransformRulesConfigSchema } from "sync/transforms/transform-types";
-import { createTwitterClient } from "sync/x-client";
+import { createTwitterClient, refreshTwitterSession } from "sync/x-client";
+import { structuredLog } from "utils/logger";
 import { sendNotification } from "utils/notifications";
 
 import { ConfigService } from "./config-service";
@@ -45,6 +54,7 @@ export class BotManager extends EventEmitter {
   private xClient: XClient | null = null;
   private xClientPromise: Promise<XClient> | null = null;
   private pruneInterval: ReturnType<typeof setInterval> | null = null;
+  private sessionRefreshInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(db: DBType, configService: ConfigService) {
     super();
@@ -559,7 +569,8 @@ export class BotManager extends EventEmitter {
   }
 
   /**
-   * Delete sync_logs older than LOG_RETENTION_DAYS
+   * Archive and delete sync_logs older than LOG_RETENTION_DAYS.
+   * Archives are written to an `archives/` directory as JSON files.
    */
   private async pruneOldLogs(): Promise<void> {
     if (LOG_RETENTION_DAYS < 0) return;
@@ -567,14 +578,79 @@ export class BotManager extends EventEmitter {
       const cutoff = new Date(
         Date.now() - LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000,
       );
-      const result = await this.db
-        .delete(Schema.SyncLogs)
-        .where(lt(Schema.SyncLogs.timestamp, cutoff));
-      const deleted = result.changes;
-      if (deleted > 0) {
-        console.log(
-          `Pruned ${deleted} log(s) older than ${LOG_RETENTION_DAYS} day(s)`,
-        );
+
+      // Fetch rows to archive before deleting
+      const oldRows = await this.db
+        .select()
+        .from(Schema.SyncLogs)
+        .where(lt(Schema.SyncLogs.timestamp, cutoff))
+        .all();
+
+      if (oldRows.length > 0) {
+        // Write archive file
+        try {
+          const archiveDir = join(dirname(DATABASE_PATH), "archives");
+          mkdirSync(archiveDir, { recursive: true });
+          const ts = new Date().toISOString().replace(/[:.]/g, "-");
+          const filename = `logs-${ts}.json`;
+          const filePath = join(archiveDir, filename);
+          const json = JSON.stringify(oldRows);
+          writeFileSync(filePath, json);
+          const sizeBytes = statSync(filePath).size;
+          const timestamps = oldRows
+            .map((r) => r.timestamp)
+            .filter(Boolean) as Date[];
+          const fromDate =
+            timestamps.length > 0
+              ? new Date(
+                  Math.min(...timestamps.map((t) => new Date(t).getTime())),
+                )
+              : cutoff;
+          const toDate =
+            timestamps.length > 0
+              ? new Date(
+                  Math.max(...timestamps.map((t) => new Date(t).getTime())),
+                )
+              : cutoff;
+          await this.db.insert(Schema.LogArchives).values({
+            filename,
+            fromDate,
+            toDate,
+            rowCount: oldRows.length,
+            sizeBytes,
+            createdAt: new Date(),
+          });
+        } catch (archiveErr) {
+          console.error("Failed to archive logs:", archiveErr);
+        }
+
+        // Delete the old rows
+        const result = await this.db
+          .delete(Schema.SyncLogs)
+          .where(lt(Schema.SyncLogs.timestamp, cutoff));
+        const deleted = result.changes;
+        if (deleted > 0) {
+          structuredLog("info", `Pruned ${deleted} log(s), archived`, {
+            retentionDays: LOG_RETENTION_DAYS,
+          });
+        }
+      }
+
+      // Check DB size and warn if over threshold
+      try {
+        if (existsSync(DATABASE_PATH)) {
+          const sizeMB = statSync(DATABASE_PATH).size / (1024 * 1024);
+          if (sizeMB > DB_SIZE_WARN_MB) {
+            sendNotification(
+              "Database size warning",
+              `Database is ${Math.round(sizeMB)} MB (threshold: ${DB_SIZE_WARN_MB} MB)`,
+              "warning",
+              "db-size-warn",
+            );
+          }
+        }
+      } catch (_) {
+        // Non-fatal
       }
     } catch (error) {
       console.error("Failed to prune old logs:", error);
@@ -583,6 +659,7 @@ export class BotManager extends EventEmitter {
 
   /**
    * Start periodic log pruning (runs immediately, then every 24 hours)
+   * and Twitter session refresh.
    */
   startLogPruning(): void {
     this.pruneOldLogs();
@@ -590,6 +667,36 @@ export class BotManager extends EventEmitter {
       () => this.pruneOldLogs(),
       24 * 60 * 60 * 1000,
     );
+    this.sessionRefreshInterval = setInterval(
+      () => this.refreshSession(),
+      TWITTER_SESSION_REFRESH_HOURS * 60 * 60 * 1000,
+    );
+  }
+
+  private async refreshSession(): Promise<void> {
+    if (!this.xClient) return;
+    try {
+      const auth = await this.configService.getTwitterAuthDecrypted();
+      if (!auth) return;
+      const ok = await refreshTwitterSession(
+        this.xClient,
+        auth.username,
+        auth.password,
+        this.db,
+      );
+      if (!ok) {
+        structuredLog(
+          "warn",
+          "Twitter session refresh failed — resetting client",
+        );
+        this.resetXClient();
+      }
+    } catch (error) {
+      structuredLog("error", "Twitter session refresh error", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      this.resetXClient();
+    }
   }
 
   /**
@@ -599,6 +706,10 @@ export class BotManager extends EventEmitter {
     if (this.pruneInterval) {
       clearInterval(this.pruneInterval);
       this.pruneInterval = null;
+    }
+    if (this.sessionRefreshInterval) {
+      clearInterval(this.sessionRefreshInterval);
+      this.sessionRefreshInterval = null;
     }
     // Stop all command pollers
     for (const [botId, poller] of this.commandPollers.entries()) {
@@ -687,5 +798,37 @@ export class BotManager extends EventEmitter {
    */
   isRunning(botId: number): boolean {
     return this.bots.has(botId);
+  }
+
+  /**
+   * Get health summary for all running bots (used by health dashboard)
+   */
+  getHealthSummary(): Array<{
+    botId: number;
+    status: BotInstanceStatus;
+    consecutiveFailures: number;
+    circuitState: Record<
+      string,
+      { failures: number; openUntil: number | null }
+    >;
+  }> {
+    const results: Array<{
+      botId: number;
+      status: BotInstanceStatus;
+      consecutiveFailures: number;
+      circuitState: Record<
+        string,
+        { failures: number; openUntil: number | null }
+      >;
+    }> = [];
+    for (const [botId, bot] of this.bots.entries()) {
+      results.push({
+        botId,
+        status: bot.getStatus(),
+        consecutiveFailures: bot.getConsecutiveFailures(),
+        circuitState: bot.getCircuitState(),
+      });
+    }
+    return results;
   }
 }

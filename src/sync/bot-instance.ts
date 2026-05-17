@@ -3,6 +3,7 @@ import { DBType, Schema } from "db";
 import { eq } from "drizzle-orm";
 import { EventEmitter } from "events";
 import ora, { Ora } from "ora";
+import { CircuitBreaker } from "sync/circuit-breaker";
 import { BlueskySynchronizerFactory } from "sync/platforms/bluesky";
 import { DiscordWebhookSynchronizerFactory } from "sync/platforms/discord-webhook/webhook-sync";
 import { MisskeySynchronizerFactory } from "sync/platforms/misskey/missky-sync";
@@ -42,11 +43,13 @@ function computeAdaptiveBounds(baselineMin: number) {
 }
 
 export interface BotInstanceStatus {
-  status: "running" | "stopped" | "error";
+  status: "running" | "stopped" | "error" | "syncing";
   lastSyncAt?: Date;
   nextSyncAt?: Date;
   errorMessage?: string;
 }
+
+const MAX_BACKOFF_MULTIPLIER = 8;
 
 export type BotInstanceEvents = {
   log: [
@@ -78,6 +81,8 @@ export class BotInstance extends EventEmitter {
   private isRunning = false;
   private isMuted = false;
   private forceResync = false;
+  private consecutiveFailures = 0;
+  private circuitBreaker = new CircuitBreaker();
 
   constructor(config: BotConfig, db: DBType, xClient: XClient) {
     super();
@@ -262,6 +267,33 @@ export class BotInstance extends EventEmitter {
    * Perform a sync cycle. Self-schedules the next run at the end (even on
    * failure) so the loop continues.
    */
+  private async isInBlackout(): Promise<boolean> {
+    try {
+      const windows = await this.db
+        .select()
+        .from(Schema.BlackoutWindows)
+        .where(eq(Schema.BlackoutWindows.botConfigId, this.config.id))
+        .all();
+      if (windows.length === 0) return false;
+      const now = new Date();
+      const day = now.getDay();
+      const mins = now.getHours() * 60 + now.getMinutes();
+      for (const w of windows) {
+        if (w.dayOfWeek !== null && w.dayOfWeek !== day) continue;
+        const start = w.startHour * 60 + w.startMinute;
+        const end = w.endHour * 60 + w.endMinute;
+        if (start <= end) {
+          if (mins >= start && mins < end) return true;
+        } else {
+          if (mins >= start || mins < end) return true;
+        }
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   private async performSync(): Promise<void> {
     if (this.isMuted) {
       this.emitLog("info", "Sync skipped (bot is muted)");
@@ -269,8 +301,29 @@ export class BotInstance extends EventEmitter {
       return;
     }
 
+    if (await this.isInBlackout()) {
+      this.emitLog("info", "Sync skipped (blackout window active)");
+      this.scheduleNextSync(this.config.syncFrequencyMin);
+      return;
+    }
+
     let newPostCount = 0;
     let syncFailed = false;
+
+    this.updateStatus({ status: "syncing" });
+
+    // Filter out platforms with open circuit breakers
+    const activeSynchronizers = this.synchronizers.filter((s) => {
+      if (this.circuitBreaker.isOpen(s.platformId)) {
+        this.emitLog(
+          "warn",
+          `Circuit open for ${s.displayName} — skipping`,
+          s.platformId,
+        );
+        return false;
+      }
+      return true;
+    });
 
     try {
       this.emitLog("info", `Starting sync for @${this.config.twitterHandle}`);
@@ -286,7 +339,7 @@ export class BotInstance extends EventEmitter {
           slot: this.config.id,
           env: `TWITTER_HANDLE${this.config.id}` as any,
         },
-        synchronizers: this.synchronizers,
+        synchronizers: activeSynchronizers,
         db: this.db,
         onLog,
         syncOptions: {
@@ -299,8 +352,6 @@ export class BotInstance extends EventEmitter {
 
       // Sync posts if enabled
       if (this.config.syncPosts) {
-        // Load mention maps fresh each cycle — tables are tiny and this
-        // avoids stale state when the maps are edited from the dashboard.
         const [globalMentionOverrides, perBotMentionOverrides] =
           await Promise.all([
             this.loadGlobalMentionOverrides(),
@@ -317,7 +368,7 @@ export class BotInstance extends EventEmitter {
             env: `TWITTER_HANDLE${this.config.id}` as any,
           },
           x: this.xClient,
-          synchronizers: this.synchronizers,
+          synchronizers: activeSynchronizers,
           onLog,
           transformRules: this.config.transformRules,
           perBotMentionOverrides,
@@ -329,10 +380,17 @@ export class BotInstance extends EventEmitter {
         this.emitLog("info", "Post syncing is disabled");
       }
 
+      // Record success for all active platforms
+      for (const s of activeSynchronizers) {
+        this.circuitBreaker.recordSuccess(s.platformId);
+      }
+
+      this.consecutiveFailures = 0;
       this.emitLog("success", `@${this.config.twitterHandle} is up-to-date`);
       this.emit("syncComplete");
     } catch (error) {
       syncFailed = true;
+      this.consecutiveFailures++;
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       this.emitLog("error", `Sync failed: ${errorMessage}`);
@@ -346,10 +404,19 @@ export class BotInstance extends EventEmitter {
       );
     }
 
-    // Schedule the next run regardless of success/failure. On failure, fall
-    // back to the baseline interval rather than adapting off partial data.
+    // On failure, use exponential backoff capped at 8x baseline.
     const nextIntervalMin = syncFailed
-      ? this.config.syncFrequencyMin
+      ? Math.min(
+          this.config.syncFrequencyMin *
+            Math.pow(
+              2,
+              Math.min(
+                this.consecutiveFailures - 1,
+                Math.log2(MAX_BACKOFF_MULTIPLIER),
+              ),
+            ),
+          this.config.syncFrequencyMin * MAX_BACKOFF_MULTIPLIER,
+        )
       : this.computeNextIntervalMin(newPostCount);
     const now = new Date();
     const nextSync = new Date(now.getTime() + nextIntervalMin * 60 * 1000);
@@ -362,6 +429,10 @@ export class BotInstance extends EventEmitter {
         errorMessage: undefined,
       });
     } else {
+      this.emitLog(
+        "warn",
+        `Backing off: next sync in ${Math.round(nextIntervalMin)} min (failure #${this.consecutiveFailures})`,
+      );
       this.updateStatus({ nextSyncAt: nextSync });
     }
 
@@ -512,5 +583,16 @@ export class BotInstance extends EventEmitter {
    */
   get running(): boolean {
     return this.isRunning;
+  }
+
+  getCircuitState(): Record<
+    string,
+    { failures: number; openUntil: number | null }
+  > {
+    return this.circuitBreaker.getState();
+  }
+
+  getConsecutiveFailures(): number {
+    return this.consecutiveFailures;
   }
 }

@@ -1,4 +1,8 @@
-import { db } from "db";
+import { statSync } from "node:fs";
+
+import { db, Schema } from "db";
+import { isNull } from "drizzle-orm";
+import { DATABASE_PATH, DB_SIZE_WARN_MB } from "env";
 import { Hono } from "hono";
 import { z } from "zod";
 
@@ -16,6 +20,36 @@ const systemRouter = new Hono<{
 
 // Apply auth middleware to all routes
 systemRouter.use("*", requireAuth);
+
+/**
+ * GET /api/system/health
+ * Health summary for all running bots (health dashboard)
+ */
+systemRouter.get("/health", async (c) => {
+  const botManager = c.get("botManager");
+  const configService = c.get("configService");
+
+  try {
+    const allBots = await configService.getAllBotConfigs();
+    const healthData = botManager.getHealthSummary();
+
+    const bots = allBots.map((bot) => {
+      const health = healthData.find((h) => h.botId === bot.id);
+      return {
+        botId: bot.id,
+        twitterHandle: bot.twitterHandle,
+        isRunning: botManager.isRunning(bot.id),
+        status: health?.status ?? null,
+        consecutiveFailures: health?.consecutiveFailures ?? 0,
+        circuitState: health?.circuitState ?? {},
+      };
+    });
+
+    return c.json({ bots });
+  } catch (error) {
+    return c.json({ error: (error as Error).message }, 500);
+  }
+});
 
 /**
  * GET /api/system/status
@@ -144,6 +178,86 @@ systemRouter.post("/restore", async (c) => {
       );
     }
     return c.json({ error: (error as Error).message }, 400);
+  }
+});
+
+/**
+ * GET /api/system/notifications
+ * Get global notification preferences
+ */
+systemRouter.get("/notifications", async (c) => {
+  try {
+    const prefs = await db
+      .select()
+      .from(Schema.NotificationPreferences)
+      .where(isNull(Schema.NotificationPreferences.botConfigId))
+      .all();
+    const map: Record<string, boolean> = {};
+    for (const p of prefs) {
+      map[p.eventType] = p.enabled;
+    }
+    return c.json({ preferences: map });
+  } catch (error) {
+    return c.json({ error: (error as Error).message }, 500);
+  }
+});
+
+const notifSchema = z.object({
+  preferences: z.record(z.string(), z.boolean()),
+});
+
+/**
+ * PUT /api/system/notifications
+ * Update global notification preferences
+ */
+systemRouter.put("/notifications", async (c) => {
+  try {
+    const body = await c.req.json();
+    const { preferences } = notifSchema.parse(body);
+    for (const [eventType, enabled] of Object.entries(preferences)) {
+      await db
+        .insert(Schema.NotificationPreferences)
+        .values({ botConfigId: null, eventType, enabled })
+        .onConflictDoUpdate({
+          target: [
+            Schema.NotificationPreferences.botConfigId,
+            Schema.NotificationPreferences.eventType,
+          ],
+          set: { enabled },
+        });
+    }
+    return c.json({ success: true });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return c.json({ error: "Validation error", details: error.errors }, 400);
+    }
+    return c.json({ error: (error as Error).message }, 500);
+  }
+});
+
+/**
+ * GET /api/system/storage
+ * Get storage info (DB size, log count, archive count)
+ */
+systemRouter.get("/storage", async (c) => {
+  try {
+    let dbSizeBytes = 0;
+    try {
+      dbSizeBytes = statSync(DATABASE_PATH).size;
+    } catch (_) {
+      // DB file may not be at expected path
+    }
+    const logCount = await db.select().from(Schema.SyncLogs).all();
+    const archives = await db.select().from(Schema.LogArchives).all();
+    return c.json({
+      dbSizeBytes,
+      dbSizeMB: Math.round((dbSizeBytes / (1024 * 1024)) * 100) / 100,
+      warnThresholdMB: DB_SIZE_WARN_MB,
+      logRowCount: logCount.length,
+      archiveCount: archives.length,
+    });
+  } catch (error) {
+    return c.json({ error: (error as Error).message }, 500);
   }
 });
 

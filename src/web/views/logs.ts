@@ -72,9 +72,11 @@ export function logsPage(botId: number, twitterHandle: string): string {
         const platform = log.platform
           ? '<span class="text-slate-500">[' + esc(log.platform) + ']</span> '
           : '';
-        return '<div class="flex gap-3 py-1 px-2 rounded ' + bgClass + ' log-entry" data-level="' + esc(log.level) + '">' +
-          '<span class="text-slate-500 shrink-0 w-40">' + esc(time) + '</span>' +
-          '<span class="font-semibold shrink-0 w-14 ' + levelClass + '">' + esc(log.level.toUpperCase()) + '</span>' +
+        return '<div class="flex flex-col sm:flex-row gap-1 sm:gap-3 py-1 px-2 rounded ' + bgClass + ' log-entry" data-level="' + esc(log.level) + '">' +
+          '<div class="flex gap-2 sm:gap-3 shrink-0">' +
+            '<span class="text-slate-500 shrink-0 sm:w-40">' + esc(time) + '</span>' +
+            '<span class="font-semibold shrink-0 w-14 ' + levelClass + '">' + esc(log.level.toUpperCase()) + '</span>' +
+          '</div>' +
           '<span class="text-slate-300 break-all">' + platform + esc(log.message) + '</span>' +
         '</div>';
       }

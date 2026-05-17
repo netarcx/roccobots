@@ -95,3 +95,9 @@ export const LOG_RETENTION_DAYS =
 
 export const APPRISE_URL = (process.env.APPRISE_URL ?? "").trim();
 export const APPRISE_URLS = (process.env.APPRISE_URLS ?? "").trim();
+
+export const LOG_FORMAT = (process.env.LOG_FORMAT ?? "text").trim();
+export const DB_SIZE_WARN_MB =
+  parseInt(process.env.DB_SIZE_WARN_MB ?? "500") || 500;
+export const TWITTER_SESSION_REFRESH_HOURS =
+  parseInt(process.env.TWITTER_SESSION_REFRESH_HOURS ?? "6") || 6;

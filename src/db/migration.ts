@@ -1,3 +1,12 @@
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  unlinkSync,
+} from "node:fs";
+import { dirname, join } from "node:path";
+
 import { DBType } from "db";
 import {
   generateSQLiteDrizzleJson,
@@ -5,6 +14,7 @@ import {
 } from "drizzle-kit/api";
 import { sql } from "drizzle-orm";
 import { BunSQLiteDatabase } from "drizzle-orm/bun-sqlite";
+import { DATABASE_PATH } from "env";
 
 import * as v1 from "./schema/v1";
 import * as v2 from "./schema/v2";
@@ -15,6 +25,27 @@ export const schemas = [{}, v1, v2];
 export async function migrate(
   db: BunSQLiteDatabase<{ Version: typeof v1.Version }>,
 ): Promise<DBType> {
+  // Create a backup before running any migrations
+  try {
+    if (existsSync(DATABASE_PATH)) {
+      const backupDir = join(dirname(DATABASE_PATH), "backups");
+      mkdirSync(backupDir, { recursive: true });
+      const ts = new Date().toISOString().replace(/[:.]/g, "-");
+      copyFileSync(
+        DATABASE_PATH,
+        join(backupDir, `pre-migration-${ts}.sqlite`),
+      );
+      const existing = readdirSync(backupDir)
+        .filter((f) => f.startsWith("pre-migration-"))
+        .sort();
+      while (existing.length > 5) {
+        unlinkSync(join(backupDir, existing.shift()!));
+      }
+    }
+  } catch (_) {
+    // Non-fatal — migration proceeds even if backup fails
+  }
+
   let currentVersion: number = 0;
   try {
     // 1. Try to get the current version.
@@ -174,6 +205,47 @@ export async function migrate(
     bluesky_handle text NOT NULL,
     created_at integer NOT NULL,
     updated_at integer NOT NULL
+  )`);
+
+  // Users table for multi-user auth (Feature 9)
+  db.run(`CREATE TABLE IF NOT EXISTS users (
+    id integer PRIMARY KEY AUTOINCREMENT,
+    username text NOT NULL UNIQUE,
+    password_hash text NOT NULL,
+    role text NOT NULL DEFAULT 'viewer',
+    created_at integer NOT NULL,
+    updated_at integer NOT NULL
+  )`);
+
+  // Notification preferences (Feature 8)
+  db.run(`CREATE TABLE IF NOT EXISTS notification_preferences (
+    id integer PRIMARY KEY AUTOINCREMENT,
+    bot_config_id integer REFERENCES bot_configs(id) ON DELETE CASCADE,
+    event_type text NOT NULL,
+    enabled integer NOT NULL DEFAULT 1,
+    UNIQUE(bot_config_id, event_type)
+  )`);
+
+  // Blackout windows (Feature 12)
+  db.run(`CREATE TABLE IF NOT EXISTS blackout_windows (
+    id integer PRIMARY KEY AUTOINCREMENT,
+    bot_config_id integer NOT NULL REFERENCES bot_configs(id) ON DELETE CASCADE,
+    day_of_week integer,
+    start_hour integer NOT NULL,
+    start_minute integer NOT NULL DEFAULT 0,
+    end_hour integer NOT NULL,
+    end_minute integer NOT NULL DEFAULT 0
+  )`);
+
+  // Log archives metadata (Feature 20)
+  db.run(`CREATE TABLE IF NOT EXISTS log_archives (
+    id integer PRIMARY KEY AUTOINCREMENT,
+    filename text NOT NULL,
+    from_date integer NOT NULL,
+    to_date integer NOT NULL,
+    row_count integer NOT NULL,
+    size_bytes integer NOT NULL,
+    created_at integer NOT NULL
   )`);
 
   return db as DBType;

@@ -1,4 +1,4 @@
-import { DBType } from "db";
+import { DBType, Schema } from "db";
 import { Hono } from "hono";
 import { serveStatic } from "hono/bun";
 
@@ -6,6 +6,7 @@ import {
   requireAuth,
   requireAuthPage,
   sessionMiddleware,
+  setUserService,
 } from "./middleware/auth";
 import { errorHandler } from "./middleware/error";
 import analyticsRouter from "./routes/api/analytics";
@@ -15,15 +16,19 @@ import commandsRouter from "./routes/api/commands";
 import eventsRouter from "./routes/api/events";
 import mentionsRouter from "./routes/api/mentions";
 import systemRouter from "./routes/api/system";
+import usersRouter from "./routes/api/users";
 import { BotManager } from "./services/bot-manager";
 import { importFromEnv } from "./services/config-migration";
 import { ConfigService } from "./services/config-service";
+import { UserService } from "./services/user-service";
 import { analyticsPage } from "./views/analytics";
 import { botFormPage } from "./views/bot-form";
 import { dashboardPage } from "./views/dashboard";
+import { healthPage } from "./views/health";
 import { loginPage } from "./views/login";
 import { logsPage } from "./views/logs";
 import { settingsPage } from "./views/settings";
+import { usersPage } from "./views/users";
 
 export interface ServerOptions {
   db: DBType;
@@ -41,6 +46,27 @@ export function createServer(options: ServerOptions) {
   // Initialize services
   const configService = new ConfigService(db);
   const botManager = new BotManager(db, configService);
+  const userService = new UserService(db);
+  setUserService(userService);
+
+  // Bootstrap admin user from env if no users exist
+  const adminPw = process.env.WEB_ADMIN_PASSWORD;
+  if (adminPw) {
+    userService.bootstrapFromEnv(adminPw).catch(() => {});
+  }
+
+  // Health check endpoints (no auth required — must be before session middleware)
+  app.get("/health", (c) =>
+    c.json({ status: "ok", uptime: Math.floor(process.uptime()) }),
+  );
+  app.get("/ready", async (c) => {
+    const allBots = await db.select().from(Schema.BotConfigs).all();
+    const running = allBots.filter((b) => botManager.isRunning(Number(b.id)));
+    return c.json({
+      ready: true,
+      bots: { total: allBots.length, running: running.length },
+    });
+  });
 
   // Apply global middleware
   app.use("*", errorHandler);
@@ -50,6 +76,7 @@ export function createServer(options: ServerOptions) {
   app.use("*", async (c, next) => {
     c.set("botManager", botManager);
     c.set("configService", configService);
+    c.set("userService", userService);
     await next();
   });
 
@@ -63,6 +90,7 @@ export function createServer(options: ServerOptions) {
   app.route("/api/bots", commandsRouter);
   app.route("/api/mentions", mentionsRouter);
   app.route("/api/system", systemRouter);
+  app.route("/api/users", usersRouter);
   app.route("/api/events", eventsRouter);
 
   // Config import endpoint
@@ -117,6 +145,14 @@ export function createServer(options: ServerOptions) {
 
   app.get("/analytics", requireAuthPage, async (_c) => {
     return _c.html(analyticsPage());
+  });
+
+  app.get("/health-dashboard", requireAuthPage, async (_c) => {
+    return _c.html(healthPage());
+  });
+
+  app.get("/users", requireAuthPage, async (_c) => {
+    return _c.html(usersPage());
   });
 
   app.get("/settings", requireAuthPage, async (_c) => {

@@ -1,83 +1,69 @@
 import { Hono } from "hono";
 import { z } from "zod";
 
-import { isAuthenticated, login, logout } from "../../middleware/auth";
+import {
+  getSessionRole,
+  getSessionUser,
+  isAuthenticated,
+  login,
+  loginWithUser,
+  logout,
+} from "../../middleware/auth";
 
 const authRouter = new Hono();
 
-// Login schema
 const loginSchema = z.object({
+  username: z.string().optional(),
   password: z.string().min(1, "Password is required"),
 });
 
-/**
- * POST /api/auth/login
- * Login with admin password
- */
 authRouter.post("/login", async (c) => {
   try {
     const body = await c.req.json();
-    const { password } = loginSchema.parse(body);
+    const { username, password } = loginSchema.parse(body);
 
-    const success = login(c, password);
-
-    if (success) {
+    // Try multi-user auth first, fall back to legacy
+    const user = await loginWithUser(c, username ?? "admin", password);
+    if (user) {
       return c.json({
         success: true,
         message: "Login successful",
+        user: { username: user.username, role: user.role },
       });
-    } else {
-      return c.json(
-        {
-          success: false,
-          error: "Invalid password",
-        },
-        401,
-      );
     }
+
+    // Legacy fallback for password-only login
+    if (!username && login(c, password)) {
+      return c.json({
+        success: true,
+        message: "Login successful",
+        user: { username: "admin", role: "admin" },
+      });
+    }
+
+    return c.json({ success: false, error: "Invalid credentials" }, 401);
   } catch (error) {
     if (error instanceof z.ZodError) {
       return c.json(
-        {
-          success: false,
-          error: "Validation error",
-          details: error.errors,
-        },
+        { success: false, error: "Validation error", details: error.errors },
         400,
       );
     }
-
-    return c.json(
-      {
-        success: false,
-        error: "Login failed",
-      },
-      500,
-    );
+    return c.json({ success: false, error: "Login failed" }, 500);
   }
 });
 
-/**
- * POST /api/auth/logout
- * Logout current user
- */
 authRouter.post("/logout", async (c) => {
   logout(c);
-  return c.json({
-    success: true,
-    message: "Logout successful",
-  });
+  return c.json({ success: true, message: "Logout successful" });
 });
 
-/**
- * GET /api/auth/status
- * Check authentication status
- */
 authRouter.get("/status", async (c) => {
   const authenticated = isAuthenticated(c);
-
   return c.json({
     authenticated,
+    role: authenticated ? getSessionRole(c) : null,
+    username: authenticated ? getSessionUser(c) : null,
   });
 });
 

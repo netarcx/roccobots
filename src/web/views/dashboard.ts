@@ -38,12 +38,24 @@ export function dashboardPage(): string {
     </div>
 
     <!-- Actions -->
-    <div class="flex flex-wrap items-center gap-3 mb-6">
-      <a href="/bots/new" class="bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-2 rounded transition-colors">Add Bot</a>
-      <button onclick="importEnv()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm font-medium px-4 py-2 rounded transition-colors">Import from .env</button>
-      <div class="flex-1"></div>
-      <button onclick="startAll()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-4 py-2 rounded transition-colors">Start All</button>
-      <button onclick="stopAll()" class="bg-red-600 hover:bg-red-500 text-white text-sm font-medium px-4 py-2 rounded transition-colors">Stop All</button>
+    <div class="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 mb-6">
+      <div class="flex gap-3">
+        <a href="/bots/new" class="flex-1 sm:flex-none text-center bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-2 rounded transition-colors">Add Bot</a>
+        <button onclick="importEnv()" class="flex-1 sm:flex-none bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm font-medium px-4 py-2 rounded transition-colors">Import from .env</button>
+      </div>
+      <div class="hidden sm:block flex-1"></div>
+      <div class="flex gap-3">
+        <button onclick="startAll()" class="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-4 py-2 rounded transition-colors">Start All</button>
+        <button onclick="stopAll()" class="flex-1 sm:flex-none bg-red-600 hover:bg-red-500 text-white text-sm font-medium px-4 py-2 rounded transition-colors">Stop All</button>
+      </div>
+    </div>
+
+    <!-- Bulk Action Bar (hidden until selection) -->
+    <div id="bulk-bar" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-800 border border-slate-600 rounded-lg shadow-xl px-5 py-3 flex items-center gap-3 z-40">
+      <span id="bulk-count" class="text-sm font-medium text-slate-200">0 selected</span>
+      <button onclick="bulkStart()" class="text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded transition-colors">Start Selected</button>
+      <button onclick="bulkStop()" class="text-xs bg-red-600 hover:bg-red-500 text-white px-3 py-1.5 rounded transition-colors">Stop Selected</button>
+      <button onclick="clearSelection()" class="text-xs text-slate-400 hover:text-slate-200 transition-colors ml-1">Deselect All</button>
     </div>
 
     <!-- Bot Cards -->
@@ -99,7 +111,10 @@ export function dashboardPage(): string {
 
         return '<div class="bg-slate-800 border border-slate-700 rounded-lg p-4" data-bot-id="' + bot.id + '">' +
           '<div class="flex items-center justify-between mb-2">' +
-            '<h3 class="font-semibold text-slate-100">@' + esc(bot.twitterHandle) + '</h3>' +
+            '<div class="flex items-center gap-2">' +
+              '<input type="checkbox" class="bulk-check w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500" data-bot-id="' + bot.id + '" onchange="updateBulkBar()">' +
+              '<h3 class="font-semibold text-slate-100">@' + esc(bot.twitterHandle) + '</h3>' +
+            '</div>' +
             '<span class="text-xs font-medium px-2 py-0.5 rounded ' + statusClass + '">' + status + '</span>' +
           '</div>' +
           '<div class="text-xs text-slate-400 space-y-1 mb-3">' +
@@ -108,7 +123,7 @@ export function dashboardPage(): string {
             (platforms ? '<div class="flex flex-wrap gap-1 mt-1">' + platforms + '</div>' : '') +
           '</div>' +
           errorMsg +
-          '<div class="flex items-center gap-2 mt-3 pt-3 border-t border-slate-700">' +
+          '<div class="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-slate-700">' +
             (bot.isRunning
               ? '<button onclick="stopBot(' + bot.id + ')" class="text-xs bg-red-600 hover:bg-red-500 text-white px-3 py-1.5 rounded transition-colors">Stop</button>'
               : '<button onclick="startBot(' + bot.id + ')" class="text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded transition-colors">Start</button>'
@@ -259,6 +274,56 @@ export function dashboardPage(): string {
             document.getElementById('twitter-auth-warning').classList.remove('hidden');
           }
         } catch (_) {}
+      }
+
+      function getSelectedBotIds() {
+        return Array.from(document.querySelectorAll('.bulk-check:checked')).map(el => parseInt(el.dataset.botId));
+      }
+
+      function updateBulkBar() {
+        const ids = getSelectedBotIds();
+        const bar = document.getElementById('bulk-bar');
+        if (ids.length > 0) {
+          bar.classList.remove('hidden');
+          document.getElementById('bulk-count').textContent = ids.length + ' selected';
+        } else {
+          bar.classList.add('hidden');
+        }
+      }
+
+      function clearSelection() {
+        document.querySelectorAll('.bulk-check:checked').forEach(el => { el.checked = false; });
+        updateBulkBar();
+      }
+
+      async function bulkStart() {
+        const ids = getSelectedBotIds();
+        if (ids.length === 0) return;
+        try {
+          await fetch('/api/bots/bulk-start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ botIds: ids }),
+          });
+          showToast('Starting ' + ids.length + ' bot(s)', 'info');
+          clearSelection();
+          loadBots();
+        } catch (_) { showToast('Bulk start failed', 'error'); }
+      }
+
+      async function bulkStop() {
+        const ids = getSelectedBotIds();
+        if (ids.length === 0) return;
+        try {
+          await fetch('/api/bots/bulk-stop', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ botIds: ids }),
+          });
+          showToast('Stopped ' + ids.length + ' bot(s)', 'success');
+          clearSelection();
+          loadBots();
+        } catch (_) { showToast('Bulk stop failed', 'error'); }
       }
 
       loadBots();

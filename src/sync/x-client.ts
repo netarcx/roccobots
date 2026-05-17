@@ -83,3 +83,42 @@ export async function createTwitterClient({
 
   return client;
 }
+
+export async function refreshTwitterSession(
+  client: Scraper,
+  username: string,
+  password: string,
+  db: DBType,
+): Promise<boolean> {
+  try {
+    const loggedIn = await client.isLoggedIn();
+    if (loggedIn) {
+      const cookies = await client.getCookies();
+      const cookieString = JSON.stringify(cookies.map((c) => c.toString()));
+      await db
+        .insert(Schema.TwitterCookieCache)
+        .values({ userHandle: username, cookie: cookieString })
+        .onConflictDoUpdate({
+          target: Schema.TwitterCookieCache.userHandle,
+          set: { cookie: cookieString },
+        });
+      return true;
+    }
+    await client.clearCookies();
+    await client.login(username, password);
+    if (await client.isLoggedIn()) {
+      const cookies = await client.getCookies();
+      const cookieString = JSON.stringify(cookies.map((c) => c.toString()));
+      await db
+        .insert(Schema.TwitterCookieCache)
+        .values({ userHandle: username, cookie: cookieString })
+        .onConflictDoUpdate({
+          target: Schema.TwitterCookieCache.userHandle,
+          set: { cookie: cookieString },
+        });
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}

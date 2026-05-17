@@ -55,6 +55,48 @@ export function settingsPage(data: SettingsData): string {
         </form>
       </div>
 
+      <!-- Notification Preferences -->
+      <div class="bg-slate-800 border border-slate-700 rounded-lg p-6 mb-6">
+        <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wide mb-4">Notifications</h2>
+        <p class="text-sm text-slate-400 mb-4">Choose which events send push notifications. Notifications are delivered via the Apprise service configured in your environment variables (<code class="text-slate-300">APPRISE_URL</code> / <code class="text-slate-300">APPRISE_URLS</code>).</p>
+        <div id="notif-prefs" class="space-y-3">
+          <label class="flex items-start gap-2 cursor-pointer">
+            <input type="checkbox" id="notif-sync_error" checked class="w-4 h-4 mt-0.5 rounded border-slate-600 bg-slate-700 text-blue-500">
+            <div>
+              <span class="text-sm text-slate-300">Sync Errors</span>
+              <div class="text-xs text-slate-500">Notify when a bot fails to sync posts or profiles</div>
+            </div>
+          </label>
+          <label class="flex items-start gap-2 cursor-pointer">
+            <input type="checkbox" id="notif-bot_stopped" checked class="w-4 h-4 mt-0.5 rounded border-slate-600 bg-slate-700 text-blue-500">
+            <div>
+              <span class="text-sm text-slate-300">Bot Stopped Unexpectedly</span>
+              <div class="text-xs text-slate-500">Notify when a bot crashes or fails to start</div>
+            </div>
+          </label>
+          <label class="flex items-start gap-2 cursor-pointer">
+            <input type="checkbox" id="notif-health_alert" checked class="w-4 h-4 mt-0.5 rounded border-slate-600 bg-slate-700 text-blue-500">
+            <div>
+              <span class="text-sm text-slate-300">Health Alerts</span>
+              <div class="text-xs text-slate-500">Notify when database size exceeds the warning threshold or a platform is temporarily paused</div>
+            </div>
+          </label>
+        </div>
+        <button onclick="saveNotifPrefs()" class="mt-4 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-2 rounded transition-colors">Save Preferences</button>
+      </div>
+
+      <!-- Storage Info -->
+      <div class="bg-slate-800 border border-slate-700 rounded-lg p-6 mb-6">
+        <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wide mb-4">Storage</h2>
+        <p class="text-sm text-slate-400 mb-4">Database and log storage usage. Old logs are automatically archived after the retention period (<code class="text-slate-300">LOG_RETENTION_DAYS</code>). You'll receive a notification if the database exceeds the size threshold.</p>
+        <div id="storage-info" class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+          <div><span class="text-slate-400">Database Size</span><div id="storage-db-size" class="text-slate-200 font-medium">-</div></div>
+          <div><span class="text-slate-400">Log Entries</span><div id="storage-log-rows" class="text-slate-200 font-medium">-</div></div>
+          <div><span class="text-slate-400">Archived Logs</span><div id="storage-archives" class="text-slate-200 font-medium">-</div></div>
+          <div><span class="text-slate-400">Size Warning At</span><div id="storage-threshold" class="text-slate-200 font-medium">-</div></div>
+        </div>
+      </div>
+
       <!-- Global Mention Overrides -->
       <div class="bg-slate-800 border border-slate-700 rounded-lg p-6 mb-6">
         <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wide mb-4">Global Mention Overrides</h2>
@@ -187,6 +229,55 @@ export function settingsPage(data: SettingsData): string {
 
       loadGlobalMentions();
 
+      // Notification preferences
+      async function loadNotifPrefs() {
+        try {
+          const res = await fetch('/api/system/notifications');
+          const data = await res.json();
+          const prefs = data.preferences || {};
+          for (const [key, val] of Object.entries(prefs)) {
+            const el = document.getElementById('notif-' + key);
+            if (el) el.checked = val;
+          }
+        } catch (_) {}
+      }
+
+      async function saveNotifPrefs() {
+        const types = ['sync_error', 'bot_stopped', 'health_alert'];
+        const preferences = {};
+        for (const t of types) {
+          const el = document.getElementById('notif-' + t);
+          preferences[t] = el ? el.checked : true;
+        }
+        try {
+          const res = await fetch('/api/system/notifications', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ preferences }),
+          });
+          if (res.ok) showToast('Preferences saved', 'success');
+          else showToast('Failed to save preferences', 'error');
+        } catch (_) { showToast('Failed to save preferences', 'error'); }
+      }
+
+      loadNotifPrefs();
+
+      // Storage info
+      async function loadStorage() {
+        try {
+          const res = await fetch('/api/system/storage');
+          const data = await res.json();
+          document.getElementById('storage-db-size').textContent = data.dbSizeMB + ' MB';
+          document.getElementById('storage-log-rows').textContent = data.logRowCount.toLocaleString();
+          document.getElementById('storage-archives').textContent = data.archiveCount;
+          document.getElementById('storage-threshold').textContent = data.warnThresholdMB + ' MB';
+          if (data.dbSizeMB > data.warnThresholdMB) {
+            document.getElementById('storage-db-size').classList.add('text-red-400');
+          }
+        } catch (_) {}
+      }
+
+      loadStorage();
 
       function handleRestoreFile(input) {
         const file = input.files[0];

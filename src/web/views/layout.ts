@@ -11,9 +11,18 @@ export interface LayoutOptions {
   content: string;
   scripts?: string;
   authenticated?: boolean;
+  role?: string;
 }
 
-function nav(authenticated: boolean): string {
+function navLink(href: string, label: string): string {
+  return `<a href="${href}" class="px-3 py-1.5 rounded text-sm text-slate-300 hover:text-white hover:bg-slate-700 transition-colors">${label}</a>`;
+}
+
+function mobileNavLink(href: string, label: string): string {
+  return `<a href="${href}" class="block px-4 py-3 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors">${label}</a>`;
+}
+
+function nav(authenticated: boolean, _role?: string): string {
   if (!authenticated) return "";
   return `
     <nav class="bg-slate-800 border-b border-slate-700">
@@ -22,16 +31,42 @@ function nav(authenticated: boolean): string {
           <div class="flex items-center gap-6">
             <a href="/" class="text-lg font-bold text-blue-400 hover:text-blue-300">RoccoBots</a>
             <div class="hidden sm:flex items-center gap-1">
-              <a href="/" class="px-3 py-1.5 rounded text-sm text-slate-300 hover:text-white hover:bg-slate-700 transition-colors">Dashboard</a>
-              <a href="/bots/new" class="px-3 py-1.5 rounded text-sm text-slate-300 hover:text-white hover:bg-slate-700 transition-colors">Add Bot</a>
-              <a href="/analytics" class="px-3 py-1.5 rounded text-sm text-slate-300 hover:text-white hover:bg-slate-700 transition-colors">Analytics</a>
-              <a href="/settings" class="px-3 py-1.5 rounded text-sm text-slate-300 hover:text-white hover:bg-slate-700 transition-colors">Settings</a>
+              ${navLink("/", "Dashboard")}
+              ${navLink("/bots/new", "Add Bot")}
+              ${navLink("/health-dashboard", "Health")}
+              ${navLink("/analytics", "Analytics")}
+              ${navLink("/settings", "Settings")}
+              <a href="/users" id="nav-users" class="hidden px-3 py-1.5 rounded text-sm text-slate-300 hover:text-white hover:bg-slate-700 transition-colors">Users</a>
             </div>
           </div>
-          <button onclick="logout()" class="text-sm text-slate-400 hover:text-white transition-colors">Logout</button>
+          <div class="flex items-center gap-3">
+            <button onclick="logout()" class="hidden sm:block text-sm text-slate-400 hover:text-white transition-colors">Logout</button>
+            <button onclick="toggleMobileMenu()" class="sm:hidden text-slate-400 hover:text-white p-1">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
-    </nav>`;
+      <div id="mobile-menu" class="hidden sm:hidden border-t border-slate-700">
+        ${mobileNavLink("/", "Dashboard")}
+        ${mobileNavLink("/bots/new", "Add Bot")}
+        ${mobileNavLink("/health-dashboard", "Health")}
+        ${mobileNavLink("/analytics", "Analytics")}
+        ${mobileNavLink("/settings", "Settings")}
+        <a href="/users" id="nav-users-mobile" class="hidden block px-4 py-3 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors">Users</a>
+        <button onclick="logout()" class="block w-full text-left px-4 py-3 text-red-400 hover:text-red-300 hover:bg-slate-700 transition-colors">Logout</button>
+      </div>
+    </nav>
+    <script>
+      fetch('/api/auth/status').then(function(r){return r.json()}).then(function(d){
+        if(d.role==='admin'){
+          var e=document.getElementById('nav-users');if(e)e.classList.remove('hidden');
+          var m=document.getElementById('nav-users-mobile');if(m)m.classList.remove('hidden');
+        }
+      }).catch(function(){});
+    </script>`;
 }
 
 function toastContainer(): string {
@@ -94,11 +129,16 @@ export function layout(opts: LayoutOptions): string {
   </script>
 </head>
 <body class="bg-slate-900 text-slate-200 min-h-screen">
-  ${nav(opts.authenticated ?? false)}
+  ${nav(opts.authenticated ?? false, opts.role)}
   <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     ${opts.content}
   </main>
   ${toastContainer()}
+  <script>
+    function toggleMobileMenu() {
+      document.getElementById('mobile-menu')?.classList.toggle('hidden');
+    }
+  </script>
   ${opts.scripts ?? ""}
 </body>
 </html>`;

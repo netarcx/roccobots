@@ -1,6 +1,6 @@
 import AtpAgent, { CredentialSession } from "@atproto/api";
 import { Schema } from "db";
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { Hono } from "hono";
 
 import { requireAuth } from "../../middleware/auth";
@@ -16,11 +16,11 @@ const analyticsRouter = new Hono<{
 
 analyticsRouter.use("*", requireAuth);
 
-function rangeToDate(range: string | undefined): Date | null {
-  const now = Date.now();
-  if (range === "day") return new Date(now - 86400 * 1000);
-  if (range === "week") return new Date(now - 7 * 86400 * 1000);
-  if (range === "month") return new Date(now - 30 * 86400 * 1000);
+function rangeToEpoch(range: string | undefined): number | null {
+  const now = Math.floor(Date.now() / 1000);
+  if (range === "day") return now - 86400;
+  if (range === "week") return now - 7 * 86400;
+  if (range === "month") return now - 30 * 86400;
   return null;
 }
 
@@ -30,14 +30,14 @@ function rangeToDate(range: string | undefined): Date | null {
  */
 analyticsRouter.get("/combined", async (c) => {
   const range = c.req.query("range");
-  const after = rangeToDate(range);
+  const after = rangeToEpoch(range);
 
   const configService = c.get("configService");
   const db = configService.getDb();
 
   const conditions = [sql`1=1`];
-  if (after) {
-    conditions.push(gte(Schema.TweetMetrics.recordedAt, after));
+  if (after !== null) {
+    conditions.push(sql`${Schema.TweetMetrics.recordedAt} >= ${after}`);
   }
 
   const metrics = db
@@ -73,7 +73,7 @@ analyticsRouter.get("/:botId", async (c) => {
   if (isNaN(botId)) return c.json({ error: "Invalid bot ID" }, 400);
 
   const range = c.req.query("range");
-  const after = rangeToDate(range);
+  const after = rangeToEpoch(range);
 
   const configService = c.get("configService");
   const db = configService.getDb();
@@ -87,8 +87,8 @@ analyticsRouter.get("/:botId", async (c) => {
   }
 
   const conditions = [eq(Schema.TweetMetrics.botConfigId, botId)];
-  if (after) {
-    conditions.push(gte(Schema.TweetMetrics.recordedAt, after));
+  if (after !== null) {
+    conditions.push(sql`${Schema.TweetMetrics.recordedAt} >= ${after}`);
   }
 
   const metrics = db

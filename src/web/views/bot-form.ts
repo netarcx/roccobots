@@ -161,6 +161,32 @@ export function botFormPage(bot?: BotData): string {
           </div>
         </div>
 
+        <!-- Blackout Windows -->
+        <div class="bg-slate-800 border border-slate-700 rounded-lg p-6 mb-6">
+          <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wide mb-4">Blackout Windows</h2>
+          <p class="text-sm text-slate-400 mb-4">Schedule quiet hours when the bot will skip syncing. Times use the server's timezone. Overnight windows (e.g. 22:00-08:00) are supported.</p>
+          <div id="blackout-list" class="space-y-2 mb-4"></div>
+          <div class="grid grid-cols-1 sm:grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end">
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">Day</label>
+              <select id="bo-day" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200">
+                <option value="">Every day</option>
+                <option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option>
+                <option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">Start</label>
+              <input type="time" id="bo-start" value="22:00" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200">
+            </div>
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">End</label>
+              <input type="time" id="bo-end" value="08:00" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200">
+            </div>
+            <button type="button" onclick="addBlackout()" class="bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-2 rounded transition-colors">Add</button>
+          </div>
+        </div>
+
         <!-- Commands -->
         <div class="bg-slate-800 border border-slate-700 rounded-lg p-6 mb-6">
           <div class="flex items-center justify-between mb-4">
@@ -561,9 +587,70 @@ export function botFormPage(bot?: BotData): string {
         }
       }
 
+      // Blackout windows
+      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+      async function loadBlackouts() {
+        if (!botId) return;
+        try {
+          const res = await fetch('/api/bots/' + botId + '/blackouts');
+          const data = await res.json();
+          const list = document.getElementById('blackout-list');
+          if (!list) return;
+          const windows = data.blackouts || [];
+          if (windows.length === 0) {
+            list.innerHTML = '<div class="text-sm text-slate-500">No blackout windows configured.</div>';
+            return;
+          }
+          list.innerHTML = windows.map(function(w) {
+            const day = w.dayOfWeek !== null ? dayNames[w.dayOfWeek] : 'Every day';
+            const start = String(w.startHour).padStart(2, '0') + ':' + String(w.startMinute).padStart(2, '0');
+            const end = String(w.endHour).padStart(2, '0') + ':' + String(w.endMinute).padStart(2, '0');
+            return '<div class="flex items-center gap-3 text-sm bg-slate-700/50 rounded px-3 py-2">' +
+              '<span class="text-slate-300">' + escapeHtml(day) + '</span>' +
+              '<span class="text-slate-400">' + start + ' - ' + end + '</span>' +
+              '<div class="flex-1"></div>' +
+              '<button type="button" onclick="deleteBlackout(' + w.id + ')" class="text-xs text-red-400 hover:text-red-300">Remove</button>' +
+            '</div>';
+          }).join('');
+        } catch (_) {}
+      }
+
+      async function addBlackout() {
+        if (!botId) return;
+        var dayVal = document.getElementById('bo-day').value;
+        var startParts = document.getElementById('bo-start').value.split(':');
+        var endParts = document.getElementById('bo-end').value.split(':');
+        try {
+          var res = await fetch('/api/bots/' + botId + '/blackouts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              dayOfWeek: dayVal === '' ? null : parseInt(dayVal),
+              startHour: parseInt(startParts[0]),
+              startMinute: parseInt(startParts[1] || '0'),
+              endHour: parseInt(endParts[0]),
+              endMinute: parseInt(endParts[1] || '0'),
+            }),
+          });
+          if (res.ok) { showToast('Blackout added', 'success'); loadBlackouts(); }
+          else showToast('Failed to add blackout', 'error');
+        } catch (_) { showToast('Failed to add blackout', 'error'); }
+      }
+
+      async function deleteBlackout(windowId) {
+        if (!botId) return;
+        try {
+          await fetch('/api/bots/' + botId + '/blackouts/' + windowId, { method: 'DELETE' });
+          showToast('Blackout removed', 'success');
+          loadBlackouts();
+        } catch (_) { showToast('Failed to remove blackout', 'error'); }
+      }
+
       if (isEdit && botId) {
         loadCommandConfig();
         loadBotMentions();
+        loadBlackouts();
       }
 
       // --- Per-bot mention overrides ---

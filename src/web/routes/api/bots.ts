@@ -1,3 +1,5 @@
+import { db as globalDb, Schema } from "db";
+import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { TransformRulesConfigSchema } from "sync/transforms/transform-types";
 import { z } from "zod";
@@ -351,6 +353,168 @@ botsRouter.put("/:id/transforms", async (c) => {
     if (error instanceof z.ZodError) {
       return c.json({ error: "Validation error", details: error.errors }, 400);
     }
+    return c.json({ error: (error as Error).message }, 400);
+  }
+});
+
+/**
+ * GET /api/bots/:id/blackouts
+ * Get blackout windows for a bot
+ */
+botsRouter.get("/:id/blackouts", async (c) => {
+  const id = parseInt(c.req.param("id"));
+  if (isNaN(id)) return c.json({ error: "Invalid bot ID" }, 400);
+  const windows = await globalDb
+    .select()
+    .from(Schema.BlackoutWindows)
+    .where(eq(Schema.BlackoutWindows.botConfigId, id))
+    .all();
+  return c.json({ blackouts: windows });
+});
+
+const blackoutSchema = z.object({
+  dayOfWeek: z.number().int().min(0).max(6).nullable(),
+  startHour: z.number().int().min(0).max(23),
+  startMinute: z.number().int().min(0).max(59).optional(),
+  endHour: z.number().int().min(0).max(23),
+  endMinute: z.number().int().min(0).max(59).optional(),
+});
+
+/**
+ * POST /api/bots/:id/blackouts
+ * Add a blackout window
+ */
+botsRouter.post("/:id/blackouts", async (c) => {
+  const id = parseInt(c.req.param("id"));
+  if (isNaN(id)) return c.json({ error: "Invalid bot ID" }, 400);
+  try {
+    const body = await c.req.json();
+    const data = blackoutSchema.parse(body);
+    const result = await globalDb
+      .insert(Schema.BlackoutWindows)
+      .values({
+        botConfigId: id,
+        dayOfWeek: data.dayOfWeek,
+        startHour: data.startHour,
+        startMinute: data.startMinute ?? 0,
+        endHour: data.endHour,
+        endMinute: data.endMinute ?? 0,
+      })
+      .returning();
+    return c.json({ blackout: result[0] }, 201);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return c.json({ error: "Validation error", details: error.errors }, 400);
+    }
+    return c.json({ error: (error as Error).message }, 400);
+  }
+});
+
+/**
+ * DELETE /api/bots/:id/blackouts/:windowId
+ * Delete a blackout window
+ */
+botsRouter.delete("/:id/blackouts/:windowId", async (c) => {
+  const windowId = parseInt(c.req.param("windowId"));
+  if (isNaN(windowId)) return c.json({ error: "Invalid window ID" }, 400);
+  await globalDb
+    .delete(Schema.BlackoutWindows)
+    .where(eq(Schema.BlackoutWindows.id, windowId));
+  return c.json({ success: true });
+});
+
+/**
+ * POST /api/bots/bulk-start
+ * Start multiple bots by ID
+ */
+botsRouter.post("/bulk-start", async (c) => {
+  const botManager = c.get("botManager");
+  try {
+    const { botIds } = (await c.req.json()) as { botIds: number[] };
+    const results: Array<{ botId: number; success: boolean; error?: string }> =
+      [];
+    for (const id of botIds) {
+      try {
+        if (!botManager.isRunning(id)) {
+          await botManager.start(id);
+        }
+        results.push({ botId: id, success: true });
+      } catch (error) {
+        results.push({
+          botId: id,
+          success: false,
+          error: (error as Error).message,
+        });
+      }
+    }
+    return c.json({ results });
+  } catch (error) {
+    return c.json({ error: (error as Error).message }, 400);
+  }
+});
+
+/**
+ * POST /api/bots/bulk-stop
+ * Stop multiple bots by ID
+ */
+botsRouter.post("/bulk-stop", async (c) => {
+  const botManager = c.get("botManager");
+  try {
+    const { botIds } = (await c.req.json()) as { botIds: number[] };
+    const results: Array<{ botId: number; success: boolean; error?: string }> =
+      [];
+    for (const id of botIds) {
+      try {
+        if (botManager.isRunning(id)) {
+          botManager.stop(id);
+        }
+        results.push({ botId: id, success: true });
+      } catch (error) {
+        results.push({
+          botId: id,
+          success: false,
+          error: (error as Error).message,
+        });
+      }
+    }
+    return c.json({ results });
+  } catch (error) {
+    return c.json({ error: (error as Error).message }, 400);
+  }
+});
+
+/**
+ * POST /api/bots/:id/clone
+ * Clone a bot config with a new Twitter handle
+ */
+botsRouter.post("/:id/clone", async (c) => {
+  const configService = c.get("configService");
+  const id = parseInt(c.req.param("id"));
+  if (isNaN(id)) return c.json({ error: "Invalid bot ID" }, 400);
+
+  try {
+    const { twitterHandle } = (await c.req.json()) as {
+      twitterHandle: string;
+    };
+    if (!twitterHandle) {
+      return c.json({ error: "twitterHandle is required" }, 400);
+    }
+    const source = await configService.getBotConfigById(id);
+    const newBot = await configService.createBotConfig({
+      twitterHandle,
+      enabled: false,
+      syncFrequencyMin: source.syncFrequencyMin,
+      adaptivePolling: source.adaptivePolling,
+      syncPosts: source.syncPosts,
+      syncProfileDescription: source.syncProfileDescription,
+      syncProfilePicture: source.syncProfilePicture,
+      syncProfileName: source.syncProfileName,
+      syncProfileHeader: source.syncProfileHeader,
+      backdateBlueskyPosts: source.backdateBlueskyPosts,
+      analyticsEnabled: source.analyticsEnabled,
+    });
+    return c.json({ bot: newBot }, 201);
+  } catch (error) {
     return c.json({ error: (error as Error).message }, 400);
   }
 });
