@@ -24,6 +24,7 @@ export interface BotConfig {
   syncProfileName: boolean;
   syncProfileHeader: boolean;
   backdateBlueskyPosts: boolean;
+  timezone: string;
   transformRules: TransformRulesConfig | null;
   platforms: {
     platformId: string;
@@ -276,8 +277,28 @@ export class BotInstance extends EventEmitter {
         .all();
       if (windows.length === 0) return false;
       const now = new Date();
-      const day = now.getDay();
-      const mins = now.getHours() * 60 + now.getMinutes();
+      const tz = this.config.timezone || "America/Chicago";
+      const fmt = new Intl.DateTimeFormat("en-US", {
+        timeZone: tz,
+        hour: "numeric",
+        minute: "numeric",
+        weekday: "short",
+        hour12: false,
+      });
+      const parts = Object.fromEntries(
+        fmt.formatToParts(now).map((p) => [p.type, p.value]),
+      );
+      const dayMap: Record<string, number> = {
+        Sun: 0,
+        Mon: 1,
+        Tue: 2,
+        Wed: 3,
+        Thu: 4,
+        Fri: 5,
+        Sat: 6,
+      };
+      const day = dayMap[parts.weekday] ?? now.getDay();
+      const mins = parseInt(parts.hour) * 60 + parseInt(parts.minute);
       for (const w of windows) {
         if (w.dayOfWeek !== null && w.dayOfWeek !== day) continue;
         const start = w.startHour * 60 + w.startMinute;

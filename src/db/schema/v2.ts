@@ -43,6 +43,7 @@ export const BotConfigs = sqliteTable("bot_configs", {
   adaptivePolling: integer("adaptive_polling", { mode: "boolean" })
     .notNull()
     .default(false),
+  timezone: text("timezone").notNull().default("America/Chicago"),
   mentionOverrides: text("mention_overrides"), // JSON { [twitterHandleLower]: blueskyHandle } — nullable; missing keys fall back to global
   transformRules: text("transform_rules"), // JSON TransformRulesConfig
   createdAt: integer("created_at", { mode: "timestamp" })

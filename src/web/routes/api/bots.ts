@@ -33,6 +33,7 @@ const createBotSchema = z.object({
   syncProfileHeader: z.boolean().optional(),
   backdateBlueskyPosts: z.boolean().optional(),
   analyticsEnabled: z.boolean().optional(),
+  timezone: z.string().optional(),
 });
 
 const updateBotSchema = createBotSchema.partial();
@@ -512,6 +513,7 @@ botsRouter.post("/:id/clone", async (c) => {
       syncProfileHeader: source.syncProfileHeader,
       backdateBlueskyPosts: source.backdateBlueskyPosts,
       analyticsEnabled: source.analyticsEnabled,
+      timezone: source.timezone,
     });
     return c.json({ bot: newBot }, 201);
   } catch (error) {

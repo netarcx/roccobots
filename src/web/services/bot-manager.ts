@@ -142,6 +142,7 @@ export class BotManager extends EventEmitter {
       syncProfileName: botConfig.syncProfileName,
       syncProfileHeader: botConfig.syncProfileHeader,
       backdateBlueskyPosts: botConfig.backdateBlueskyPosts,
+      timezone: botConfig.timezone ?? "America/Chicago",
       transformRules,
       platforms: platforms.map((p) => ({
         platformId: p.platformId,

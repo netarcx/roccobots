@@ -17,6 +17,7 @@ interface BotData {
   syncProfileHeader?: boolean;
   backdateBlueskyPosts?: boolean;
   analyticsEnabled?: boolean;
+  timezone?: string;
   enabled?: boolean;
   platforms?: {
     platformId: string;
@@ -95,6 +96,41 @@ export function botFormPage(bot?: BotData): string {
               <p class="text-xs text-slate-500 mt-1">When adaptive polling is on, this is the baseline; the bot polls between 0.25× and 4× this value based on activity.</p>
             </div>
             <div>
+              <label class="block text-sm text-slate-400 mb-1">Timezone</label>
+              <select id="timezone"
+                class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500">
+                ${[
+                  "America/New_York",
+                  "America/Chicago",
+                  "America/Denver",
+                  "America/Los_Angeles",
+                  "America/Anchorage",
+                  "Pacific/Honolulu",
+                  "America/Phoenix",
+                  "America/Toronto",
+                  "America/Vancouver",
+                  "America/Sao_Paulo",
+                  "Europe/London",
+                  "Europe/Paris",
+                  "Europe/Berlin",
+                  "Europe/Moscow",
+                  "Asia/Tokyo",
+                  "Asia/Shanghai",
+                  "Asia/Kolkata",
+                  "Asia/Dubai",
+                  "Australia/Sydney",
+                  "Pacific/Auckland",
+                  "UTC",
+                ]
+                  .map(
+                    (tz) =>
+                      `<option value="${tz}" ${(bot?.timezone ?? "America/Chicago") === tz ? "selected" : ""}>${tz}</option>`,
+                  )
+                  .join("")}
+              </select>
+              <p class="text-xs text-slate-500 mt-1">Used for blackout window scheduling. Defaults to America/Chicago.</p>
+            </div>
+            <div>
               ${checkbox("adaptivePolling", "Adaptive polling (auto-adjust interval based on activity)", bot?.adaptivePolling ?? false)}
             </div>
           </div>
@@ -164,7 +200,7 @@ export function botFormPage(bot?: BotData): string {
         <!-- Blackout Windows -->
         <div class="bg-slate-800 border border-slate-700 rounded-lg p-6 mb-6">
           <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wide mb-4">Blackout Windows</h2>
-          <p class="text-sm text-slate-400 mb-4">Schedule quiet hours when the bot will skip syncing. Times use the server's timezone. Overnight windows (e.g. 22:00-08:00) are supported.</p>
+          <p class="text-sm text-slate-400 mb-4">Schedule quiet hours when the bot will skip syncing. Times use the bot's configured timezone. Overnight windows (e.g. 22:00-08:00) are supported.</p>
           <div id="blackout-list" class="space-y-2 mb-4"></div>
           <div class="grid grid-cols-1 sm:grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end">
             <div>
@@ -409,6 +445,7 @@ export function botFormPage(bot?: BotData): string {
             syncProfileHeader: document.getElementById('syncProfileHeader').checked,
             backdateBlueskyPosts: document.getElementById('backdateBlueskyPosts').checked,
             analyticsEnabled: document.getElementById('analyticsEnabled').checked,
+            timezone: document.getElementById('timezone').value,
             enabled: document.getElementById('enabled').checked,
           };
 

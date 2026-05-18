@@ -33,6 +33,7 @@ export interface CreateBotConfigInput {
   syncProfileHeader?: boolean;
   backdateBlueskyPosts?: boolean;
   analyticsEnabled?: boolean;
+  timezone?: string;
 }
 
 export interface UpdateBotConfigInput {
@@ -47,6 +48,7 @@ export interface UpdateBotConfigInput {
   syncProfileHeader?: boolean;
   backdateBlueskyPosts?: boolean;
   analyticsEnabled?: boolean;
+  timezone?: string;
 }
 
 export interface BotConfigOutput {
@@ -62,6 +64,7 @@ export interface BotConfigOutput {
   syncProfileHeader: boolean;
   backdateBlueskyPosts: boolean;
   analyticsEnabled: boolean;
+  timezone: string;
   createdAt: Date;
   updatedAt: Date;
   platforms: PlatformConfigOutput[];
@@ -119,6 +122,7 @@ export class ConfigService {
         syncProfileHeader: input.syncProfileHeader ?? true,
         backdateBlueskyPosts: input.backdateBlueskyPosts ?? true,
         analyticsEnabled: input.analyticsEnabled ?? true,
+        timezone: input.timezone ?? "America/Chicago",
       })
       .returning()
       .get();
@@ -157,6 +161,7 @@ export class ConfigService {
       syncProfileHeader: botConfig.syncProfileHeader,
       backdateBlueskyPosts: botConfig.backdateBlueskyPosts,
       analyticsEnabled: botConfig.analyticsEnabled,
+      timezone: botConfig.timezone ?? "America/Chicago",
       createdAt: new Date(Number(botConfig.createdAt)),
       updatedAt: new Date(Number(botConfig.updatedAt)),
       platforms,

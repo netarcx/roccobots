@@ -226,6 +226,15 @@ export async function migrate(
     UNIQUE(bot_config_id, event_type)
   )`);
 
+  // Add timezone column to bot_configs (defaults to America/Chicago)
+  try {
+    db.run(
+      "ALTER TABLE bot_configs ADD COLUMN timezone TEXT NOT NULL DEFAULT 'America/Chicago'",
+    );
+  } catch (_) {
+    // Column already exists
+  }
+
   // Blackout windows (Feature 12)
   db.run(`CREATE TABLE IF NOT EXISTS blackout_windows (
     id integer PRIMARY KEY AUTOINCREMENT,
