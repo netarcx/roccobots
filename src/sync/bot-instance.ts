@@ -11,6 +11,7 @@ import { syncPosts } from "sync/sync-posts";
 import { syncProfile } from "sync/sync-profile";
 import { SynchronizerFactory, TaggedSynchronizer } from "sync/synchronizer";
 import { MentionMap } from "sync/transforms/apply-mention-overrides";
+import { deriveAutoMentionOverrides } from "sync/transforms/derive-auto-overrides";
 import { TransformRulesConfig } from "sync/transforms/transform-types";
 
 export interface BotConfig {
@@ -185,13 +186,22 @@ export class BotInstance extends EventEmitter {
 
   /**
    * Load the global mention override map from the DB into a plain object.
+   * Auto-derives twitter→bluesky mappings from all configured bots, then
+   * layers explicit global overrides on top (so manual entries win).
    */
   private async loadGlobalMentionOverrides(): Promise<MentionMap> {
-    const rows = await this.db.select().from(Schema.MentionOverrides).all();
-    const map: MentionMap = {};
-    for (const r of rows) {
+    const [autoMap, explicitRows] = await Promise.all([
+      deriveAutoMentionOverrides(this.db),
+      this.db.select().from(Schema.MentionOverrides).all(),
+    ]);
+
+    const map: MentionMap = { ...autoMap };
+
+    // Explicit overrides win over auto-derived
+    for (const r of explicitRows) {
       map[r.twitterHandle.toLowerCase()] = r.blueskyHandle;
     }
+
     return map;
   }
 

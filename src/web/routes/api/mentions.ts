@@ -23,12 +23,15 @@ const setBotMapSchema = z.object({
 
 /**
  * GET /api/mentions
- * List global mention overrides.
+ * List global mention overrides + auto-derived overrides from bot configs.
  */
 mentionsRouter.get("/", async (c) => {
   const configService = c.get("configService");
-  const map = await configService.getGlobalMentionOverrides();
-  return c.json({ mentionOverrides: map });
+  const [map, auto] = await Promise.all([
+    configService.getGlobalMentionOverrides(),
+    configService.getAutoDerivedMentionOverrides(),
+  ]);
+  return c.json({ mentionOverrides: map, autoOverrides: auto });
 });
 
 /**

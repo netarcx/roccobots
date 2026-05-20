@@ -102,6 +102,13 @@ export function settingsPage(data: SettingsData): string {
         <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wide mb-4">Global Mention Overrides</h2>
         <p class="text-sm text-slate-400 mb-4">Rewrite <code>@twitterHandle</code> to <code>@blueskyHandle</code> when a bot posts to Bluesky. Shared across all bots; per-bot overrides take precedence. Handles are matched case-insensitively.</p>
 
+        <div id="auto-mentions-section" class="hidden mb-4">
+          <h3 class="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Auto-detected from bots</h3>
+          <div id="auto-mentions-list" class="space-y-1 mb-3"></div>
+          <p class="text-xs text-slate-500">These are derived from your bots' Twitter and Bluesky handles. Manual overrides below take precedence.</p>
+        </div>
+
+        <h3 id="manual-mentions-header" class="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2 hidden">Manual overrides</h3>
         <div id="mentions-list" class="space-y-2 mb-4">
           <div class="text-sm text-slate-500">Loading...</div>
         </div>
@@ -167,11 +174,40 @@ export function settingsPage(data: SettingsData): string {
 
       async function loadGlobalMentions() {
         const container = document.getElementById('mentions-list');
+        const autoSection = document.getElementById('auto-mentions-section');
+        const autoContainer = document.getElementById('auto-mentions-list');
+        const manualHeader = document.getElementById('manual-mentions-header');
         if (!container) return;
         try {
           const res = await fetch('/api/mentions');
           const data = await res.json();
           const map = data.mentionOverrides || {};
+          const auto = data.autoOverrides || {};
+
+          // Render auto-derived overrides
+          const autoKeys = Object.keys(auto).sort();
+          const hasAuto = autoKeys.length > 0;
+          if (hasAuto && autoSection && autoContainer) {
+            autoSection.classList.remove('hidden');
+            autoContainer.innerHTML = autoKeys.map(tw => {
+              const bsky = auto[tw];
+              const overridden = Object.prototype.hasOwnProperty.call(map, tw);
+              return '<div class="flex items-center gap-2 text-sm' + (overridden ? ' opacity-50 line-through' : '') + '">' +
+                '<span class="text-emerald-400 font-mono">@' + escapeHtml(tw) + '</span>' +
+                '<span class="text-slate-500">→</span>' +
+                '<span class="text-emerald-400 font-mono flex-1 truncate">@' + escapeHtml(bsky) + '</span>' +
+                (overridden ? '<span class="text-xs text-slate-500">overridden</span>' : '') +
+              '</div>';
+            }).join('');
+          } else if (autoSection) {
+            autoSection.classList.add('hidden');
+          }
+          if (manualHeader) {
+            if (hasAuto) manualHeader.classList.remove('hidden');
+            else manualHeader.classList.add('hidden');
+          }
+
+          // Render manual overrides
           const keys = Object.keys(map).sort();
           if (keys.length === 0) {
             container.innerHTML = '<div class="text-sm text-slate-500">No overrides configured.</div>';

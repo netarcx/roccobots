@@ -5,6 +5,7 @@ import {
   DEFAULT_RESPONSES,
   ResponseMessages,
 } from "sync/commands/command-types";
+import { deriveAutoMentionOverrides } from "sync/transforms/derive-auto-overrides";
 import {
   TransformRulesConfig,
   TransformRulesConfigSchema,
@@ -636,6 +637,14 @@ export class ConfigService {
     const map: Record<string, string> = {};
     for (const r of rows) map[r.twitterHandle] = r.blueskyHandle;
     return map;
+  }
+
+  /**
+   * Auto-derive twitter→bluesky mention mappings from all configured bots.
+   * Each bot's twitterHandle maps to its Bluesky BLUESKY_IDENTIFIER credential.
+   */
+  async getAutoDerivedMentionOverrides(): Promise<Record<string, string>> {
+    return deriveAutoMentionOverrides(this.db);
   }
 
   /**
